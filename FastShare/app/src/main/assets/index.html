@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FastShare</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --text:#15181d; --muted:#667085; --accent:#1a73e8; --line:#e3e6ea; --ok:#1e8e3e; --err:#d93025; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1013; --card:#181b20; --text:#eceff3; --muted:#98a2b3; --accent:#6ea8fe; --line:#2a2f37; --ok:#5bd17a; --err:#ff7b72; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text);
+         font:16px/1.45 -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 4px 0 14px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .btn { display:block; width:100%; padding:14px; border:0; border-radius:10px; background:var(--accent); color:#fff;
+         font-size:16px; font-weight:600; text-align:center; }
+  .btn.alt { background:transparent; color:var(--accent); border:1px solid var(--line); margin-top:8px; }
+  input[type=file] { display:none; }
+  .row { padding:10px 0; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .name { word-break: break-all; }
+  .meta { color:var(--muted); font-size:13px; margin-top:2px; }
+  .bar { height:6px; background:var(--line); border-radius:3px; margin-top:6px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:0; background:var(--accent); }
+  .done .bar > i { background:var(--ok); }
+  .fail .meta { color:var(--err); }
+  a.dl { color:var(--accent); text-decoration:none; font-weight:600; word-break:break-all; }
+  .empty { color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>FastShare</h1>
+
+  <section class="card">
+    <h2>Send to the Android phone</h2>
+    <label class="btn" for="pick">Choose files</label>
+    <input id="pick" type="file" multiple>
+    <div id="uploads"></div>
+  </section>
+
+  <section class="card">
+    <h2>Get from the Android phone</h2>
+    <div id="files"><div class="empty">Nothing shared yet. On the phone, tap "Choose files to share".</div></div>
+    <button class="btn alt" id="refresh" type="button">Refresh list</button>
+  </section>
+</main>
+
+<script>
+(function () {
+  var T = new URLSearchParams(location.search).get('t') || '';
+  var MAX_PARALLEL = 3;
+
+  function fmt(b) {
+    if (b < 1000) return b + ' B';
+    var u = ['KB','MB','GB','TB'], i = -1;
+    while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
+    return b.toFixed(1) + ' ' + u[i];
+  }
+
+  // ---------- upload (this device -> phone) ----------
+  var queue = [], active = 0;
+  var uploads = document.getElementById('uploads');
+
+  document.getElementById('pick').addEventListener('change', function (e) {
+    var list = Array.prototype.slice.call(e.target.files);
+    list.forEach(function (f) { enqueue(f); });
+    e.target.value = '';
+    pump();
+  });
+
+  function enqueue(file) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<div class="name"></div><div class="meta">Waiting...</div><div class="bar"><i></i></div>';
+    row.querySelector('.name').textContent = file.name;
+    uploads.appendChild(row);
+    queue.push({ file: file, row: row });
+  }
+
+  function pump() {
+    while (active < MAX_PARALLEL && queue.length) {
+      var job = queue.shift();
+      active++;
+      send(job.file, job.row, function () { active--; pump(); });
+    }
+  }
+
+  function send(file, row, done) {
+    var meta = row.querySelector('.meta'), bar = row.querySelector('.bar > i');
+    var xhr = new XMLHttpRequest();
+    var t0 = performance.now();
+    xhr.open('POST', '/up?t=' + encodeURIComponent(T) + '&name=' + encodeURIComponent(file.name));
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      var sec = Math.max((performance.now() - t0) / 1000, 0.001);
+      bar.style.width = (e.loaded / e.total * 100).toFixed(1) + '%';
+      meta.textContent = fmt(e.loaded) + ' of ' + fmt(e.total) + ' - ' + (e.loaded / 1e6 / sec).toFixed(1) + ' MB/s';
+    };
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        var sec = Math.max((performance.now() - t0) / 1000, 0.001);
+        row.classList.add('done');
+        bar.style.width = '100%';
+        meta.textContent = 'Sent ' + fmt(file.size) + ' in ' + sec.toFixed(1) + 's (' + (file.size / 1e6 / sec).toFixed(1) + ' MB/s)';
+      } else {
+        row.classList.add('fail');
+        meta.textContent = 'Failed (' + xhr.status + ')';
+      }
+      done();
+    };
+    xhr.onerror = xhr.ontimeout = function () {
+      row.classList.add('fail');
+      meta.textContent = 'Connection lost';
+      done();
+    };
+    xhr.send(file);
+  }
+
+  // ---------- download (phone -> this device) ----------
+  var filesEl = document.getElementById('files');
+
+  function loadFiles() {
+    var x = new XMLHttpRequest();
+    x.open('GET', '/api/files?t=' + encodeURIComponent(T));
+    x.onload = function () {
+      if (x.status !== 200) return;
+      var list = [];
+      try { list = JSON.parse(x.responseText); } catch (e) { return; }
+      filesEl.innerHTML = '';
+      if (!list.length) {
+        filesEl.innerHTML = '<div class="empty">Nothing shared yet. On the phone, tap "Choose files to share".</div>';
+        return;
+      }
+      list.forEach(function (f) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var a = document.createElement('a');
+        a.className = 'dl';
+        a.href = '/dl/' + f.id + '?t=' + encodeURIComponent(T);
+        a.setAttribute('download', f.name);
+        a.textContent = f.name;
+        var m = document.createElement('div');
+        m.className = 'meta';
+        m.textContent = f.size >= 0 ? fmt(f.size) : '';
+        row.appendChild(a);
+        row.appendChild(m);
+        filesEl.appendChild(row);
+      });
+    };
+    x.send();
+  }
+
+  document.getElementById('refresh').addEventListener('click', loadFiles);
+  loadFiles();
+  setInterval(loadFiles, 4000);
+})();
+</script>
+</body>
+</html>
