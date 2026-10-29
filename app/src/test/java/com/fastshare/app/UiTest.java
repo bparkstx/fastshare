@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
@@ -100,6 +101,9 @@ public class UiTest {
         Net.testOverride = null;
         Access.testOverride = null;
         FilesFragment.resetClipboard();
+        if (viewerController != null) {
+            try { viewerController.pause().stop().destroy(); } catch (Exception ignored) { }
+        }
         if (controller != null) {
             try { controller.pause().stop().destroy(); } catch (Exception ignored) { }
         }
@@ -725,6 +729,187 @@ public class UiTest {
         assertEquals(View.VISIBLE, cell.findViewById(R.id.check).getVisibility());
         assertTrue(new Prefs(activity).grid());                           // remembered
         tb.getMenu().performIdentifierAction(R.id.action_view_mode, 0);
+    }
+
+    private File writePng(String rel, int color, int w, int h) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        c.drawColor(color);
+        android.graphics.Paint p = new android.graphics.Paint();
+        p.setColor(0xFFFFFFFF);
+        c.drawCircle(w / 2f, h / 2f, Math.min(w, h) / 4f, p);
+        try (FileOutputStream os = new FileOutputStream(f)) { b.compress(Bitmap.CompressFormat.PNG, 100, os); }
+        return f;
+    }
+
+    private ViewerActivity openViewerFromList(String rowName) throws Exception {
+        clickRow(rowName);
+        android.content.Intent started = shadowOf(activity).getNextStartedActivity();
+        assertNotNull("a viewer should have been started", started);
+        assertEquals(ViewerActivity.class.getName(), started.getComponent().getClassName());
+        ActivityController<ViewerActivity> vc = Robolectric.buildActivity(ViewerActivity.class, started).setup();
+        viewerController = vc;
+        return vc.get();
+    }
+
+    private ActivityController<ViewerActivity> viewerController;
+
+    private void viewerMenu(ViewerActivity v, int mediaOrTextBar, int id) {
+        MaterialToolbar bar = v.findViewById(mediaOrTextBar);
+        assertTrue("menu item should exist: " + id, bar.getMenu().findItem(id) != null);
+        bar.getMenu().performIdentifierAction(id, 0);
+    }
+
+    @Test public void tappingAPhotoOpensTheGalleryWithItsNeighbours() throws Exception {
+        writePng("Pictures/Gallery/a_red.png", 0xFFE53935, 400, 300);
+        writePng("Pictures/Gallery/b_green.png", 0xFF43A047, 300, 400);
+        writePng("Pictures/Gallery/c_blue.png", 0xFF1E88E5, 400, 400);
+        write("Pictures/Gallery/notes.txt", 5);
+        launch();
+        files().openDir(new File(storage, "Pictures/Gallery"));
+        settle();
+        ViewerActivity v = openViewerFromList("b_green.png");
+        settle();
+        ViewPager2 pager = v.findViewById(R.id.pager);
+        assertEquals(View.VISIBLE, pager.getVisibility());
+        assertEquals("only the 3 photos, not the text file", 3, pager.getAdapter().getItemCount());
+        assertEquals("opens on the tapped photo", 1, pager.getCurrentItem());
+        MaterialToolbar bar = v.findViewById(R.id.mediaBar);
+        assertEquals("b_green.png", bar.getTitle().toString());
+        assertEquals("2 of 3", bar.getSubtitle().toString());
+        for (int i = 0; i < 6; i++) settle();
+        shotOf(v, "60_viewer_photo");
+
+        pager.setCurrentItem(2, false);
+        settle();
+        assertEquals("c_blue.png", bar.getTitle().toString());
+        assertEquals("3 of 3", bar.getSubtitle().toString());
+    }
+
+    @Test public void deletingAPhotoInTheGalleryUsesTheTrashAndCanBeUndone() throws Exception {
+        writePng("Pictures/Gallery/one.png", 0xFFE53935, 100, 100);
+        writePng("Pictures/Gallery/two.png", 0xFF43A047, 100, 100);
+        launch();
+        files().openDir(new File(storage, "Pictures/Gallery"));
+        settle();
+        ViewerActivity v = openViewerFromList("one.png");
+        settle();
+        ViewPager2 pager = v.findViewById(R.id.pager);
+        assertEquals(2, pager.getAdapter().getItemCount());
+        viewerMenu(v, R.id.mediaBar, R.id.action_delete);
+        waitUntil(() -> pager.getAdapter().getItemCount() == 1);
+        assertEquals(1, pager.getAdapter().getItemCount());
+        assertFalse(new File(storage, "Pictures/Gallery/one.png").exists());
+        assertEquals(1, new Trash(storage).list().size());
+
+        View action = null;
+        for (int i = 0; i < 80 && action == null; i++) {
+            try { Thread.sleep(25); } catch (InterruptedException ignored) { }
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(60));
+            action = v.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_action);
+        }
+        assertNotNull(action);
+        action.performClick();
+        waitUntil(() -> pager.getAdapter().getItemCount() == 2);
+        assertEquals(2, pager.getAdapter().getItemCount());
+        assertTrue(new File(storage, "Pictures/Gallery/one.png").exists());
+    }
+
+    @Test public void textFilesOpenInTheEditorAndSave() throws Exception {
+        File f = new File(storage, "Documents/todo.txt");
+        f.getParentFile().mkdirs();
+        java.nio.file.Files.write(f.toPath(), "buy milk\ncall mum\n".getBytes("UTF-8"));
+        launch();
+        files().openDir(new File(storage, "Documents"));
+        settle();
+        ViewerActivity v = openViewerFromList("todo.txt");
+        waitUntil(() -> ((android.widget.EditText) v.findViewById(R.id.editor)).getText().length() > 0);
+        android.widget.EditText ed = v.findViewById(R.id.editor);
+        assertEquals("buy milk\ncall mum\n", ed.getText().toString());
+        MaterialToolbar bar = v.findViewById(R.id.textBar);
+        assertEquals("todo.txt", bar.getTitle().toString());
+
+        ed.setText("buy milk\ncall mum\nbook flights\n");
+        assertEquals("a dot shows there are unsaved changes", "\u2022 todo.txt", bar.getTitle().toString());
+        shotOf(v, "61_viewer_text");
+        viewerMenu(v, R.id.textBar, R.id.action_save);
+        assertEquals("buy milk\ncall mum\nbook flights\n", new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8"));
+        assertEquals("todo.txt", bar.getTitle().toString());
+        assertFalse("no temp file left", new File(f.getPath() + ".fbsave").exists());
+    }
+
+    @Test public void closingWithUnsavedChangesAsksFirst() throws Exception {
+        File f = new File(storage, "Documents/draft.md");
+        f.getParentFile().mkdirs();
+        java.nio.file.Files.write(f.toPath(), "# draft".getBytes("UTF-8"));
+        launch();
+        files().openDir(new File(storage, "Documents"));
+        settle();
+        ViewerActivity v = openViewerFromList("draft.md");
+        waitUntil(() -> ((android.widget.EditText) v.findViewById(R.id.editor)).getText().length() > 0);
+        ((android.widget.EditText) v.findViewById(R.id.editor)).setText("# draft v2");
+        v.getOnBackPressedDispatcher().onBackPressed();
+        settle();
+        assertFalse("still open, waiting for an answer", v.isFinishing());
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();           // Discard
+        settle();
+        assertTrue(v.isFinishing());
+        assertEquals("discarding leaves the file alone", "# draft", new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8"));
+    }
+
+    @Test public void filesBinaryOrBigTextAreNotOpenedAsText() throws Exception {
+        File f = new File(storage, "Documents/latin1.txt");
+        f.getParentFile().mkdirs();
+        java.nio.file.Files.write(f.toPath(), new byte[]{'c', 'a', 'f', (byte) 0xE9});     // "café" in Latin-1, not valid UTF-8
+        launch();
+        files().openDir(new File(storage, "Documents"));
+        settle();
+        ViewerActivity v = openViewerFromList("latin1.txt");
+        waitUntil(() -> ((android.widget.EditText) v.findViewById(R.id.editor)).getText().length() > 0);
+        MaterialToolbar bar = v.findViewById(R.id.textBar);
+        assertFalse("saving would corrupt it, so the button is hidden", bar.getMenu().findItem(R.id.action_save).isVisible());
+    }
+
+    @Test public void brokenPdfShowsAnExplanation() throws Exception {
+        File f = new File(storage, "Documents/broken.pdf");
+        f.getParentFile().mkdirs();
+        java.nio.file.Files.write(f.toPath(), "not really a pdf".getBytes("UTF-8"));
+        launch();
+        files().openDir(new File(storage, "Documents"));
+        settle();
+        ViewerActivity v = openViewerFromList("broken.pdf");
+        settle();
+        assertEquals(View.VISIBLE, v.findViewById(R.id.errorBox).getVisibility());
+        assertTrue(((android.widget.TextView) v.findViewById(R.id.errorText)).getText().toString().contains("PDF"));
+        shotOf(v, "62_viewer_error");
+    }
+
+    @Test public void musicShowsThePlayerWithTheTitle() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Music"));
+        settle();
+        ViewerActivity v = openViewerFromList("song.mp3");
+        settle();
+        assertEquals(View.VISIBLE, v.findViewById(R.id.videoBox).getVisibility());
+        assertEquals(View.VISIBLE, v.findViewById(R.id.audioInfo).getVisibility());
+        assertEquals("song.mp3", ((android.widget.TextView) v.findViewById(R.id.audioTitle)).getText().toString());
+    }
+
+    @Test public void filesTheViewerCannotShowGoToOtherApps() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        clickRow("holiday-video.mp4");               // video: viewer
+        assertEquals(ViewerActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+        clickRow("Invoice March.pdf");               // pdf: viewer
+        assertEquals(ViewerActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+        clickRow("app-release.apk");                 // an installer: another app
+        android.content.Intent other = shadowOf(activity).getNextStartedActivity();
+        assertEquals(android.content.Intent.ACTION_VIEW, other.getAction());
+        assertEquals("application/vnd.android.package-archive", other.getType());
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {

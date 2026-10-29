@@ -641,7 +641,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
 
     /** Opens a folder inside the file manager, or a file with its viewer. */
     private void openAny(File f) {
-        if (f.isDirectory()) openDir(f); else FileActions.open(requireActivity(), f);
+        if (f.isDirectory()) openDir(f); else Viewer.open(requireActivity(), f, null);
     }
 
     // ------------------------------------------------------------------ selection and clicks
@@ -662,7 +662,9 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                         if (which == 0) extract(archive); else FileActions.open(requireActivity(), archive);
                     }).show();
         } else {
-            FileActions.open(requireActivity(), item.file);
+            List<File> neighbours = new ArrayList<>();
+            for (FileOps.Item it : adapter.items()) if (!it.dir) neighbours.add(it.file);
+            Viewer.open(requireActivity(), item.file, neighbours);
         }
     }
 
