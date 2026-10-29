@@ -1449,6 +1449,7 @@ public class UiTest {
         if (VaultSession.testVault == null) {
             vaultDir = new File(storage.getParentFile(), "vault-test-" + System.nanoTime());
             VaultSession.testVault = new Vault(vaultDir, Vault.NO_OUTER, 1000);
+            VaultSession.testDecoy = new Vault(new File(storage.getParentFile(), "decoy-test-" + System.nanoTime()), Vault.NO_OUTER, 1000);
         }
         vaultController = Robolectric.buildActivity(VaultActivity.class).setup();
         VaultActivity a = vaultController.get();
@@ -1491,6 +1492,8 @@ public class UiTest {
             vaultController = null;
         }
         VaultSession.testVault = null;
+        VaultSession.testDecoy = null;
+        VaultSession.decoyActive = false;
         VaultSession.pending.clear();
         if (vaultDir != null) FileOps.delete(vaultDir);
         vaultDir = null;
@@ -2605,6 +2608,115 @@ public class UiTest {
         assertEquals("Backup", ((TextView) row2.getChildAt(0).findViewById(R.id.tileLabel)).getText().toString());
         row2.getChildAt(0).performClick();
         assertEquals(BackupActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    // ------------------------------------------------------------------ decoy vault
+
+    private void vaultMenu(VaultActivity a, int id) {
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(id, 0);
+        settle();
+    }
+
+    private void typeAndUnlock(VaultActivity a, String pin) {
+        type(a, R.id.pinInput, pin);
+        tapAuth(a);
+    }
+
+    @Test public void decoyPinOpensADifferentVaultAndHidesTheDecoySettings() throws Exception {
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        // set up the decoy
+        vaultMenu(a, R.id.action_decoy);
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        shotDialog(d, "140_vault_decoy_setup");
+        android.view.ViewGroup box = (android.view.ViewGroup) ((android.view.ViewGroup) d.findViewById(androidx.appcompat.R.id.custom)).getChildAt(0);
+        EditText one = null, two = null;
+        for (int i = 0; i < box.getChildCount(); i++) {
+            if (box.getChildAt(i) instanceof EditText) {
+                if (one == null) one = (EditText) box.getChildAt(i); else two = (EditText) box.getChildAt(i);
+            }
+        }
+        one.setText("2468");                                    // the real PIN: refused
+        two.setText("2468");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNotNull("must differ from the real PIN", one.getError());
+        assertFalse(VaultSession.decoy(a).exists());
+        one.setText("1357");
+        two.setText("1358");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNotNull(two.getError());
+        two.setText("1357");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertTrue(VaultSession.decoy(a).exists());
+        assertFalse("creating it leaves it locked", VaultSession.decoy(a).isUnlocked());
+
+        // put a real file in the real vault
+        VaultSession.real(a).add(new java.io.ByteArrayInputStream("secret".getBytes()), "secret.txt", 1L);
+
+        // lock, then open with the decoy PIN: empty, and no decoy/wrong-PIN items in the menu
+        vaultMenu(a, R.id.action_lock);
+        typeAndUnlock(a, "1357");
+        assertTrue(VaultSession.decoyActive);
+        assertEquals(View.VISIBLE, a.findViewById(R.id.listBox).getVisibility());
+        assertTrue("the real file isn't in the decoy", vaultRows(a).isEmpty());
+        assertEquals("looks like a normal vault", "Private vault", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getTitle().toString());
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        assertFalse(tb.getMenu().findItem(R.id.action_decoy).isVisible());
+        assertFalse(tb.getMenu().findItem(R.id.action_intruders).isVisible());
+        assertFalse(tb.getMenu().findItem(R.id.action_bio).isVisible());
+        assertTrue(tb.getMenu().findItem(R.id.action_change_pin).isVisible());
+        // add something to the decoy, then reopen it: the file is there
+        VaultSession.decoy(a).add(new java.io.ByteArrayInputStream("holiday".getBytes()), "holiday.jpg", 1L);
+        vaultMenu(a, R.id.action_lock);
+        typeAndUnlock(a, "1357");
+        waitUntil(() -> vaultRows(a).contains("holiday.jpg"));
+        settle();
+        assertEquals(java.util.Arrays.asList("holiday.jpg"), vaultRows(a));
+        shotOf(a, "141_vault_decoy_open");
+
+        // lock again; the real PIN opens the real vault with the real file
+        vaultMenu(a, R.id.action_lock);
+        assertFalse(VaultSession.decoyActive);
+        typeAndUnlock(a, "2468");
+        assertFalse(VaultSession.decoyActive);
+        waitUntil(() -> vaultRows(a).contains("secret.txt"));
+        assertEquals(java.util.Arrays.asList("secret.txt"), vaultRows(a));
+        assertTrue(((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().findItem(R.id.action_decoy).isVisible());
+    }
+
+    @Test public void wrongPinsAreLoggedAndShownToTheOwnerButNotInsideTheDecoy() throws Exception {
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        VaultSession.decoy(a).create("1357".toCharArray());
+        VaultSession.decoy(a).lock();
+        vaultMenu(a, R.id.action_lock);
+
+        typeAndUnlock(a, "0000");
+        typeAndUnlock(a, "9999");
+        assertEquals(2, VaultSession.intruders(a).list().size());
+        assertFalse(VaultSession.get(a).isUnlocked());
+
+        // inside the decoy nothing is revealed
+        typeAndUnlock(a, "1357");
+        assertTrue(VaultSession.decoyActive);
+        settle();
+        assertFalse("no popup in the decoy", org.robolectric.shadows.ShadowDialog.getLatestDialog() != null
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).isShowing()
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getWindow().getDecorView().toString().contains("wrong"));
+        assertEquals("still logged", 2, VaultSession.intruders(a).list().size());
+        vaultMenu(a, R.id.action_lock);
+
+        // the owner's own PIN shows what happened
+        typeAndUnlock(a, "2468");
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        assertTrue(d.isShowing());
+        shotDialog(d, "142_vault_intruders");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();               // OK clears it
+        settle();
+        assertEquals(0, VaultSession.intruders(a).list().size());
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {

@@ -56,6 +56,9 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
     private final Map<String, Vault.Item> items = new LinkedHashMap<>();
 
     private Vault vault;
+    private Vault real;
+    private Vault decoyVault;
+    private boolean shownIntruders;
     private State state = State.SETUP;
     private long stoppedAt;
     private boolean askedBiometric;
@@ -84,6 +87,8 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
         // no screenshots, and the app switcher shows a blank card
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
         setContentView(R.layout.activity_vault);
+        real = VaultSession.real(this);
+        decoyVault = VaultSession.decoy(this);
         vault = VaultSession.get(this);
 
         toolbar = findViewById(R.id.toolbar);
@@ -133,7 +138,7 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
     @Override
     protected void onStart() {
         super.onStart();
-        if (stoppedAt > 0 && vault.isUnlocked() && System.currentTimeMillis() - stoppedAt > AUTO_LOCK_MS) lockNow();
+        if (stoppedAt > 0 && (real.isUnlocked() || decoyVault.isUnlocked()) && System.currentTimeMillis() - stoppedAt > AUTO_LOCK_MS) lockNow();
         stoppedAt = 0;
     }
 
@@ -148,7 +153,9 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
         super.onDestroy();
         io.shutdownNow();
         if (isFinishing()) {
-            vault.lock();
+            real.lock();
+            decoyVault.lock();
+            VaultSession.decoyActive = false;
             VaultSession.wipeViewCache(this);
         }
     }
@@ -194,6 +201,7 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
             showLockoutIfAny();
         } else {
             loadItems();
+            maybeShowIntruders();
         }
         updateToolbar();
     }
@@ -212,7 +220,11 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
             toolbar.setNavigationIcon(R.drawable.ic_close);
         } else {
             toolbar.inflateMenu(R.menu.vault_main);
-            m.findItem(R.id.action_bio).setVisible(VaultBiometric.available(this));
+            boolean decoy = VaultSession.decoyActive;
+            // inside the decoy there is nothing that hints a real vault exists
+            m.findItem(R.id.action_bio).setVisible(!decoy && VaultBiometric.available(this));
+            m.findItem(R.id.action_decoy).setVisible(!decoy);
+            m.findItem(R.id.action_intruders).setVisible(!decoy);
             m.findItem(R.id.action_bio).setTitle(vault.hasBiometric() ? "Turn off fingerprint unlock" : "Turn on fingerprint unlock");
             toolbar.setTitle("Private vault");
             toolbar.setNavigationIcon(R.drawable.ic_back);
@@ -282,7 +294,18 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
                 boolean ok = false;
                 String err = null;
                 try {
-                    ok = vault.unlock(pin);
+                    VaultGate.Result res = VaultGate.unlock(real, decoyVault, pin);
+                    if (res == VaultGate.Result.DECOY) {
+                        VaultSession.decoyActive = true;
+                        vault = decoyVault;
+                        ok = true;
+                    } else if (res == VaultGate.Result.REAL) {
+                        VaultSession.decoyActive = false;
+                        vault = real;
+                        ok = true;
+                    } else {
+                        VaultSession.intruders(this).record(System.currentTimeMillis());
+                    }
                 } catch (IOException e) {
                     err = e.getMessage();
                 }
@@ -320,7 +343,11 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
     }
 
     private void lockNow() {
-        vault.lock();
+        real.lock();
+        decoyVault.lock();
+        VaultSession.decoyActive = false;
+        shownIntruders = false;
+        vault = real;
         VaultSession.wipeViewCache(this);
         items.clear();
         askedBiometric = true;          // after a manual lock don't pop the sensor up again straight away
@@ -517,6 +544,10 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
             showChangePin();
         } else if (id == R.id.action_bio) {
             toggleBiometric();
+        } else if (id == R.id.action_decoy) {
+            showDecoy();
+        } else if (id == R.id.action_intruders) {
+            showIntruders(false);
         } else if (id == R.id.action_export) {
             export(selectedItems());
         } else if (id == R.id.action_delete) {
@@ -629,6 +660,10 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
                 return;
             }
             try {
+                if (VaultSession.decoyActive && !VaultGate.differsFromReal(real, nw.getText().toString().toCharArray())) {
+                    nw.setError("Choose a different PIN");
+                    return;
+                }
                 vault.changePin(cur.getText().toString().toCharArray(), nw.getText().toString().toCharArray());
                 dlg.dismiss();
                 Toast.makeText(this, "PIN changed", Toast.LENGTH_SHORT).show();
@@ -637,6 +672,97 @@ public class VaultActivity extends AppCompatActivity implements RowAdapter.Callb
             }
         }));
         dlg.show();
+    }
+
+    // ------------------------------------------------------------------ decoy and wrong-PIN log
+
+    private void showDecoy() {
+        if (decoyVault.exists()) {
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("Decoy vault is on")
+                    .setMessage("Typing the decoy PIN opens a separate vault instead of this one. Nothing on screen tells them apart.\n\n"
+                            + "If you turned on fingerprint unlock, a fingerprint still opens this real vault.")
+                    .setNegativeButton("Keep it", null)
+                    .setPositiveButton("Remove decoy", (d, w) -> new MaterialAlertDialogBuilder(this)
+                            .setTitle("Remove the decoy vault?")
+                            .setMessage("Anything stored in the decoy is deleted. This real vault isn't touched.")
+                            .setNegativeButton("Cancel", null)
+                            .setPositiveButton("Remove", (d2, w2) -> {
+                                decoyVault.deleteAll();
+                                Toast.makeText(this, "Decoy vault removed", Toast.LENGTH_SHORT).show();
+                            }).show())
+                    .show();
+            return;
+        }
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int p = (int) (24 * getResources().getDisplayMetrics().density);
+        box.setPadding(p, p / 2, p, 0);
+        TextView explain = new TextView(this);
+        explain.setText("If someone makes you open the vault, type this second PIN instead. It opens a different vault that "
+                + "holds only what you put in it, and looks just like the real one. Put in a few harmless files so it looks lived in.");
+        explain.setTextSize(14);
+        box.addView(explain);
+        final EditText one = pinField("Decoy PIN (4 or more)");
+        final EditText two = pinField("Decoy PIN again");
+        box.addView(one);
+        box.addView(two);
+        final androidx.appcompat.app.AlertDialog dlg = new MaterialAlertDialogBuilder(this)
+                .setTitle("Set up a decoy vault").setView(box)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Create", null).create();
+        dlg.setOnShowListener(d -> dlg.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(x -> {
+            char[] a = one.getText().toString().toCharArray();
+            if (a.length < Vault.MIN_PIN_LENGTH) {
+                one.setError("Use at least " + Vault.MIN_PIN_LENGTH + " characters");
+                return;
+            }
+            if (!one.getText().toString().equals(two.getText().toString())) {
+                two.setError("The two entries don't match");
+                return;
+            }
+            try {
+                if (!VaultGate.differsFromReal(real, a)) {
+                    one.setError("That's your real PIN. Choose a different one.");
+                    return;
+                }
+                decoyVault.create(a);
+                decoyVault.lock();
+            } catch (IOException e) {
+                one.setError(e.getMessage());
+                return;
+            }
+            dlg.dismiss();
+            Toast.makeText(this, "Decoy vault ready. Open the vault with the decoy PIN to fill it.", Toast.LENGTH_LONG).show();
+        }));
+        dlg.show();
+    }
+
+    private void maybeShowIntruders() {
+        if (shownIntruders || VaultSession.decoyActive) return;
+        if (VaultSession.intruders(this).list().isEmpty()) return;
+        shownIntruders = true;
+        showIntruders(true);
+    }
+
+    private void showIntruders(boolean automatic) {
+        final IntruderLog log = VaultSession.intruders(this);
+        List<Long> times = log.list();
+        if (times.isEmpty()) {
+            Toast.makeText(this, "No wrong PINs have been tried", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        long now = System.currentTimeMillis();
+        for (int i = times.size() - 1; i >= 0 && i >= times.size() - 8; i--) {
+            sb.append(Fmt.dateTime(times.get(i))).append("  (").append(Fmt.ago(times.get(i), now)).append(")\n");
+        }
+        if (times.size() > 8) sb.append("… and ").append(times.size() - 8).append(" earlier");
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(automatic ? "Someone tried a wrong PIN" : "Wrong PIN tries")
+                .setMessage(Fmt.plural(times.size(), "wrong try", "wrong tries") + " since you last cleared this list:\n\n" + sb)
+                .setNegativeButton(automatic ? null : "Keep", null)
+                .setPositiveButton(automatic ? "OK" : "Clear", (d, w) -> log.clear()).show();
     }
 
     private EditText pinField(String hint) {
