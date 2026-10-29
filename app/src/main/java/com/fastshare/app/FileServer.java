@@ -217,6 +217,89 @@ public class FileServer {
         return ss;
     }
 
+    // ------------------------------------------------------------------ WebDAV drive
+
+    private volatile WebDav dav;
+
+    /** Where the drive lives: /d/<token>. Windows, macOS and Linux mount this address. */
+    public String davPath() {
+        return "/d/" + (davToken != null ? davToken : token);
+    }
+
+    private volatile String davToken;
+
+    /** The drive can have its own, longer-lived secret so a mounted drive survives restarting the app. */
+    public void setDavToken(String t) {
+        davToken = t == null || t.isEmpty() ? null : t;
+    }
+
+    /** Serves {@code root} as a WebDAV drive. Pass null to switch it off. */
+    public void setDav(File root, boolean writable, WebDav.Deleter deleter) throws IOException {
+        dav = root == null ? null : new WebDav(this, davPath(), root, writable, deleter);
+    }
+
+    public boolean davEnabled() {
+        return dav != null;
+    }
+
+    Transfer newTransfer(boolean incoming, String name, String ip, long total) {
+        Transfer t = new Transfer(idCounter.incrementAndGet(), incoming, name, ip, total);
+        listener.onTransfer(t);
+        return t;
+    }
+
+    void progress(Transfer t, int bytes, long t0) {
+        t.done += bytes;
+        long now = System.nanoTime();
+        t.nanos = now - t0;
+        t.touched = System.currentTimeMillis();
+        if (now - lastProgress.get() > 250_000_000L) {
+            lastProgress.set(now);
+            listener.onTransfer(t);
+        }
+    }
+
+    void finish(Transfer t, long t0, boolean ok, String detail) {
+        t.nanos = System.nanoTime() - t0;
+        t.state = ok ? State.DONE : State.FAILED;
+        t.detail = detail;
+        listener.onTransfer(t);
+    }
+
+    private final java.util.concurrent.atomic.AtomicLong lastProgress = new java.util.concurrent.atomic.AtomicLong();
+
+    /** HTTP Basic sign-in for drive clients when a PIN is set: any user name, the PIN as the password. */
+    private boolean davSignedIn(Map<String, String> headers, String ip) {
+        String p = pin;
+        if (p == null) return true;
+        String auth = headers.get("authorization");
+        if (auth == null || !auth.regionMatches(true, 0, "Basic ", 0, 6)) return false;
+        String given;
+        try {
+            String decoded = new String(java.util.Base64.getDecoder().decode(auth.substring(6).trim()), StandardCharsets.UTF_8);
+            given = decoded.substring(decoded.indexOf(':') + 1);
+        } catch (Exception e) {
+            return false;
+        }
+        Attempts a = attempts.get(ip);
+        if (a == null) {
+            a = new Attempts();
+            attempts.put(ip, a);
+        }
+        long now = System.currentTimeMillis();
+        synchronized (a) {
+            if (a.lockedUntil > now) return false;
+            boolean ok = MessageDigest.isEqual(p.getBytes(StandardCharsets.UTF_8), given.getBytes(StandardCharsets.UTF_8));
+            if (ok) {
+                a.misses = 0;
+                return true;
+            }
+            a.misses++;
+            if (a.misses >= 5) a.lockedUntil = now + Math.min(600_000L, 30_000L << Math.min(a.misses - 5, 5));
+            return false;
+        }
+    }
+
     // ------------------------------------------------------------------ shared notes
 
     static final int NOTE_MAX_CHARS = 20_000;
@@ -466,6 +549,19 @@ public class FileServer {
             }
 
             String ip = s.getInetAddress() == null ? "?" : s.getInetAddress().getHostAddress();
+            WebDav drive = dav;
+            if (drive != null && (path.equals(davPath()) || path.startsWith(davPath() + "/"))) {
+                listener.onClient(ip, headers.get("user-agent"));
+                if (!davSignedIn(headers, ip)) {
+                    byte[] none = new byte[0];
+                    out.write(("HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"FileBandit\", charset=\"UTF-8\"\r\n"
+                            + "Content-Length: 0\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
+                    out.flush();
+                    return;
+                }
+                drive.handle(method, path, headers, in, out, ip);
+                return;
+            }
             if (!token.equals(query.get("t"))) {
                 sendBytes(out, 403, "Forbidden", "text/html; charset=utf-8", forbiddenPage().getBytes(StandardCharsets.UTF_8));
                 return;

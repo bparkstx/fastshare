@@ -65,6 +65,49 @@ final class Prefs {
         sp.edit().putBoolean("hotspotMethod", v).apply();
     }
 
+    // ------------------------------------------------------------------ the phone as a drive
+
+    boolean driveEnabled() {
+        return sp.getBoolean("driveOn", false);
+    }
+
+    void setDriveEnabled(boolean v) {
+        sp.edit().putBoolean("driveOn", v).apply();
+    }
+
+    /** The folder shown on the computer. Empty means all of internal storage. */
+    String driveFolder() {
+        return sp.getString("driveFolder", "");
+    }
+
+    void setDriveFolder(String path) {
+        sp.edit().putString("driveFolder", path == null ? "" : path).apply();
+    }
+
+    boolean driveWritable() {
+        return sp.getBoolean("driveWritable", false);
+    }
+
+    void setDriveWritable(boolean v) {
+        sp.edit().putBoolean("driveWritable", v).apply();
+    }
+
+    /** Secret part of the drive's address. Made once, so a mounted drive keeps working after the app restarts. */
+    String driveToken() {
+        String t = sp.getString("driveToken", "");
+        if (t.isEmpty()) t = newDriveToken();
+        return t;
+    }
+
+    String newDriveToken() {
+        String alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom r = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 14; i++) sb.append(alphabet.charAt(r.nextInt(alphabet.length())));
+        sp.edit().putString("driveToken", sb.toString()).apply();
+        return sb.toString();
+    }
+
     /** PIN the iPhone/PC page asks for, or empty when the link works on its own. */
     String linkPin() {
         return sp.getString("linkPin", "");

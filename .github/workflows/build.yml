@@ -22,12 +22,13 @@ jobs:
           SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
-      - name: Install real test servers (WebDAV, SMB, SFTP)
+      - name: Install real test servers (WebDAV, SMB, SFTP) and the WebDAV compliance suite
         # The network-location tests talk to real servers on localhost. Without these they are skipped.
         run: |
           python3 -m venv "$RUNNER_TEMP/pyenv"
           "$RUNNER_TEMP/pyenv/bin/pip" install --quiet wsgidav cheroot impacket asyncssh
           echo "FB_PYENV_BIN=$RUNNER_TEMP/pyenv/bin" >> "$GITHUB_ENV"
+          sudo apt-get install -y --no-install-recommends litmus
       - name: Run tests (server, file operations, network protocols and the app's screens)
         run: ./gradlew --no-daemon testDebugUnitTest
       - name: Load signing key

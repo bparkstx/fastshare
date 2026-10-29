@@ -2306,6 +2306,114 @@ public class UiTest {
         assertTrue(transfer().isVisible());
     }
 
+    // ------------------------------------------------------------------ phone as a drive
+
+    private static String davCall(ShareHub hub, String method, String rel, String body, String... headers) throws Exception {
+        String base = hub.driveUrl().replaceFirst("//[^:/]+", "//127.0.0.1");
+        okhttp3.Request.Builder b = new okhttp3.Request.Builder().url(base + rel).method(method,
+                body == null && !method.equals("PUT") && !method.equals("PROPFIND") ? null
+                        : okhttp3.RequestBody.create(body == null ? "" : body, okhttp3.MediaType.parse("application/xml")));
+        for (int i = 0; i + 1 < headers.length; i += 2) b.header(headers[i], headers[i + 1]);
+        try (okhttp3.Response r = new okhttp3.OkHttpClient().newCall(b.build()).execute()) {
+            return r.code() + " " + (r.body() == null ? "" : r.body().string());
+        }
+    }
+
+    @Test public void driveCardTurnsOnShowsAnAddressAndServesFiles() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertEquals(null, hub.driveUrl());
+
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.VISIBLE, v.findViewById(R.id.driveBox).getVisibility());
+        String url = ((TextView) v.findViewById(R.id.driveUrl)).getText().toString();
+        assertTrue(url, url.matches("http://192\\.168\\.23\\.33:\\d+/d/[a-z0-9]{14}/"));
+        assertEquals(url, hub.driveUrl());
+        assertTrue(((TextView) v.findViewById(R.id.driveHelp)).getText().toString().contains("can't change anything"));
+        shotScrollContent("121_transfer_drive", v);
+
+        // the computer can read, but by default not change
+        String listing = davCall(hub, "PROPFIND", "", "", "Depth", "1");
+        assertTrue(listing, listing.startsWith("207") && listing.contains("Download"));
+        assertTrue(davCall(hub, "PUT", "new.txt", "hi").startsWith("403"));
+        assertFalse(new File(storage, "new.txt").exists());
+
+        // allow changes: copy in, then delete (which goes to the recycle bin)
+        v.findViewById(R.id.driveWrite).performClick();
+        settle();
+        assertTrue(((TextView) v.findViewById(R.id.driveHelp)).getText().toString().contains("Deleted things go to this phone's Trash"));
+        assertTrue(davCall(hub, "PUT", "new.txt", "hi there").startsWith("201"));
+        assertEquals("hi there", new String(Files.readAllBytes(new File(storage, "new.txt").toPath()), StandardCharsets.UTF_8));
+        assertTrue(davCall(hub, "DELETE", "new.txt", null).startsWith("204"));
+        assertFalse(new File(storage, "new.txt").exists());
+        assertEquals("deleted from the computer = recoverable on the phone", 1, new Trash(storage).list().size());
+        assertEquals("new.txt", new Trash(storage).list().get(0).name);
+
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertEquals(null, hub.driveUrl());
+    }
+
+    @Test public void driveFolderCanBeChosenAndTheAddressSurvivesRestartsButCanBeReset() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        String first = hub.driveUrl();
+
+        v.findViewById(R.id.driveFolderBtn).performClick();
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        int downloadIndex = -1;
+        for (int i = 0; i < d.getListView().getCount(); i++) if ("Download".equals(String.valueOf(d.getListView().getItemAtPosition(i)))) downloadIndex = i;
+        assertTrue("Download is offered", downloadIndex > 0);
+        d.getListView().performItemClick(null, downloadIndex, downloadIndex);
+        settle();
+        assertEquals(new File(storage, "Download"), hub.driveRoot());
+        assertEquals("Shared folder: Download", ((TextView) v.findViewById(R.id.driveFolderText)).getText().toString());
+        String listing = davCall(hub, "PROPFIND", "", "", "Depth", "1");
+        assertTrue(listing, listing.contains("notes.txt") && !listing.contains("DCIM"));
+
+        // same address after the app restarts
+        ShareHub again = new ShareHub(activity);
+        again.start();
+        waitUntil(again::isRunning);
+        assertEquals(first.replaceFirst(":\\d+/", ":X/"), again.driveUrl().replaceFirst(":\\d+/", ":X/"));
+        again.stop();
+
+        // resetting gives a new one, and the old one stops working
+        v.findViewById(R.id.driveReset).performClick();
+        settle();
+        assertFalse(first.equals(hub.driveUrl()));
+        String oldBase = first.replaceFirst("//[^:/]+", "//127.0.0.1");
+        okhttp3.Request old = new okhttp3.Request.Builder().url(oldBase.replaceFirst(":\\d+/", ":" + hub.port() + "/")).method("PROPFIND",
+                okhttp3.RequestBody.create("", okhttp3.MediaType.parse("application/xml"))).header("Depth", "0").build();
+        try (okhttp3.Response r = new okhttp3.OkHttpClient().newCall(old).execute()) {
+            assertEquals(403, r.code());
+        }
+    }
+
+    @Test public void driveStaysOffWithoutFileAccess() throws Exception {
+        Access.testOverride = false;
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertFalse(((android.widget.CompoundButton) v.findViewById(R.id.driveSwitch)).isChecked());
+        assertFalse(FastShareApp.hub(activity).driveEnabled());
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
