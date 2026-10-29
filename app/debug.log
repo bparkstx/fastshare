@@ -4467,3 +4467,3837 @@ Expect: 100-continue
 [status] HTTP/1.1 100 Continue
 ******* Running test 3: finish ********
 sess: Destroying session.
+Version string: neon 0.33.0: Library build, IPv6, libxml 2.9.14, zlib 1.3, GNU TLS 3.8.3.
+******* Running test 0: init ********
+******* Running test 1: begin ********
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Keep-Alive: 
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 2: options ********
+Running pre_send hooks
+Sending request headers:
+OPTIONS /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 2 (options)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 200 OK
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] DAV: 1, 2
+Header Name: [dav], Value: [1, 2]
+[hdr] MS-Author-Via: DAV
+Header Name: [ms-author-via], Value: [DAV]
+[hdr] Allow: OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK
+Header Name: [allow], Value: [OPTIONS, GET, HEAD, PUT, DELETE, MKCOL, MOVE, COPY, PROPFIND, PROPPATCH, LOCK, UNLOCK]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 200 class 2xx, error line:
+200 OK
+Running destroy hooks.
+Request ends.
+******* Running test 3: put_get ********
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/res HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 41
+X-Litmus: basic: 3 (put_get)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (41 bytes):
+[This is
+a test file.
+for litmus
+testing.
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+GET /d/abc234/litmus/res HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 3 (put_get)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 200 OK
+[hdr] Content-Type: application/octet-stream
+Header Name: [content-type], Value: [application/octet-stream]
+[hdr] Content-Length: 41
+Header Name: [content-length], Value: [41]
+[hdr] Accept-Ranges: bytes
+Header Name: [accept-ranges], Value: [bytes]
+[hdr] Last-Modified: Thu, 29 Oct 2026 20:20:07 GMT
+Header Name: [last-modified], Value: [Thu, 29 Oct 2026 20:20:07 GMT]
+[hdr] ETag: "1a18951e41c-29"
+Header Name: [etag], Value: ["1a18951e41c-29"]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Reading 41 bytes of response body.
+Got 41 bytes.
+Read block (41 bytes):
+[This is
+a test file.
+for litmus
+testing.
+]
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 4: put_get_utf8_segment ********
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/res-%e2%82%ac HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 41
+X-Litmus: basic: 4 (put_get_utf8_segment)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (41 bytes):
+[This is
+a test file.
+for litmus
+testing.
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+GET /d/abc234/litmus/res-%e2%82%ac HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 4 (put_get_utf8_segment)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 200 OK
+[hdr] Content-Type: application/octet-stream
+Header Name: [content-type], Value: [application/octet-stream]
+[hdr] Content-Length: 41
+Header Name: [content-length], Value: [41]
+[hdr] Accept-Ranges: bytes
+Header Name: [accept-ranges], Value: [bytes]
+[hdr] Last-Modified: Thu, 29 Oct 2026 20:20:07 GMT
+Header Name: [last-modified], Value: [Thu, 29 Oct 2026 20:20:07 GMT]
+[hdr] ETag: "1a18951e424-29"
+Header Name: [etag], Value: ["1a18951e424-29"]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Reading 41 bytes of response body.
+Got 41 bytes.
+Read block (41 bytes):
+[This is
+a test file.
+for litmus
+testing.
+]
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 5: put_no_parent ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/409me/noparent.txt/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 5 (put_no_parent)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 409 Conflict
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 6: mkcol_over_plain ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/res-%e2%82%ac/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 6 (mkcol_over_plain)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 405 Method Not Allowed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 7: delete ********
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/res-%e2%82%ac HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 7 (delete)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 8: delete_null ********
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/404me HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 8 (delete_null)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 9: delete_fragment ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/frag/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 9 (delete_fragment)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/frag/#ment HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 9 (delete_fragment)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/frag/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 9 (delete_fragment)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 10: mkcol ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/coll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 10 (mkcol)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 11: mkcol_again ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/coll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 11 (mkcol_again)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 405 Method Not Allowed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 12: delete_coll ********
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/coll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 12 (delete_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 13: mkcol_no_parent ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/409me/noparent/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: basic: 13 (mkcol_no_parent)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 409 Conflict
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 14: mkcol_with_body ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/mkcolbody HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Type: xzy-foo/bar-512
+Content-Length: 8
+X-Litmus: basic: 14 (mkcol_with_body)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (8 bytes):
+[afafafaf]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 415 Unsupported Media Type
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 415 class 4xx, error line:
+415 Unsupported Media Type
+Running destroy hooks.
+Request ends.
+******* Running test 15: finish ********
+sess: Destroying session.
+Version string: neon 0.33.0: Library build, IPv6, libxml 2.9.14, zlib 1.3, GNU TLS 3.8.3.
+******* Running test 0: init ********
+******* Running test 1: begin ********
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Keep-Alive: 
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 2: copy_init ********
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 2 (copy_init)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/copycoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 2 (copy_init)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 3: copy_simple ********
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/copydest
+Overwrite: F
+X-Litmus: copymove: 3 (copy_simple)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 4: copy_overwrite ********
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/copydest
+Overwrite: F
+X-Litmus: copymove: 4 (copy_overwrite)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 412 Precondition Failed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/copydest
+Overwrite: T
+X-Litmus: copymove: 4 (copy_overwrite)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/copycoll/
+Overwrite: T
+X-Litmus: copymove: 4 (copy_overwrite)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 5: copy_nodestcoll ********
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: 0
+Destination: http://127.0.0.1:39077/d/abc234/litmus/nonesuch/foo
+Overwrite: F
+X-Litmus: copymove: 5 (copy_nodestcoll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 409 Conflict
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 6: copy_cleanup ********
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/copysrc HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 6 (copy_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/copydest HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 6 (copy_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/copycoll HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 6 (copy_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/copycoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 6 (copy_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 7: copy_coll ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.0 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.1 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.3 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.4 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.5 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.6 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.7 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.8 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo.9 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ccsrc/subcoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/ccdest/
+Overwrite: F
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/ccdest2/
+Overwrite: F
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/ccdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/ccdest2/
+Overwrite: F
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 412 Precondition Failed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/ccdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/ccdest/
+Overwrite: T
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.0 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.1 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.3 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.4 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.5 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.6 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.7 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.8 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/foo.9 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/subcoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 7 (copy_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 8: copy_shallow ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/ccsrc/foo HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: 0
+Destination: http://127.0.0.1:39077/d/abc234/litmus/ccdest/
+Overwrite: F
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/foo HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ccdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 8 (copy_shallow)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 9: move ********
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/move HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/move2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/movecoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/move HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/movedest
+Overwrite: F
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/move2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/movedest
+Overwrite: F
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 412 Precondition Failed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/move2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/movedest
+Overwrite: T
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/movedest HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/movecoll/
+Overwrite: T
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/movecoll HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 9 (move)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 10: move_coll ********
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/mvsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.0 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.1 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.3 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.4 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.5 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.6 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.7 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.8 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvsrc/foo.9 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+PUT /d/abc234/litmus/mvnoncoll HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Content-Length: 32
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Sending request body:
+Body block (32 bytes):
+[This
+is
+a
+test
+file
+called
+foo
+
+]
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Request ends, status 201 class 2xx, error line:
+201 Created
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/mvsrc/subcoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/mvsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvdest2/
+Overwrite: F
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/mvsrc/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvdest/
+Overwrite: F
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/mvdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvdest2/
+Overwrite: F
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 412 Precondition Failed
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/mvdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvdest/
+Overwrite: T
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+COPY /d/abc234/litmus/mvdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Depth: infinity
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvdest2/
+Overwrite: F
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.0 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.1 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.2 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.3 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.4 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.5 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.6 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.7 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.8 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/foo.9 HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/subcoll/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MOVE /d/abc234/litmus/mvdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+Destination: http://127.0.0.1:39077/d/abc234/litmus/mvnoncoll
+Overwrite: T
+X-Litmus: copymove: 10 (move_coll)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 11: move_cleanup ********
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 11 (move_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvdest2/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 11 (move_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 404 Not Found
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/mvnoncoll HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: copymove: 11 (move_cleanup)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 12: finish ********
+sess: Destroying session.
+Version string: neon 0.33.0: Library build, IPv6, libxml 2.9.14, zlib 1.3, GNU TLS 3.8.3.
+******* Running test 0: init ********
+******* Running test 1: begin ********
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+HTTP session to http://127.0.0.1:39077 begins.
+sess: Using IP literal address for 127.0.0.1
+Running pre_send hooks
+Sending request headers:
+DELETE /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Keep-Alive: 
+Connection: TE, Keep-Alive
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: http: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 204 No Content
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+Running pre_send hooks
+Sending request headers:
+MKCOL /d/abc234/litmus/ HTTP/1.1
+User-Agent: litmus/0.13 neon/0.33.0
+Connection: TE
+TE: trailers
+Host: 127.0.0.1:39077
+X-Litmus: http: 1 (begin)
+
+Sending request-line and headers:
+req: Connecting to 127.0.0.1:39077
+Request sent; retry is 0.
+[status-line] < HTTP/1.1 201 Created
+[hdr] Content-Type: text/plain
+Header Name: [content-type], Value: [text/plain]
+[hdr] Content-Length: 0
+Header Name: [content-length], Value: [0]
+[hdr] Cache-Control: no-store
+Header Name: [cache-control], Value: [no-store]
+[hdr] Connection: close
+Header Name: [connection], Value: [close]
+[hdr] 
+End of headers.
+Running post_headers hooks
+Running post_send hooks
+sess: Closing connection.
+sess: Connection closed.
+Running destroy hooks.
+Request ends.
+******* Running test 2: expect100 ********
+Request:
+PUT /d/abc234/litmus/expect100 HTTP/1.1
+Host: 127.0.0.1:39077
+X-Litmus: http
+User-Agent: litmus/0.13
+Content-Length: 100
+Expect: 100-continue
+
+[status] HTTP/1.1 100 Continue
+******* Running test 3: finish ********
+sess: Destroying session.

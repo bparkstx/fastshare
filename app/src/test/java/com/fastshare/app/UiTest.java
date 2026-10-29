@@ -2271,6 +2271,7 @@ public class UiTest {
         assertTrue(sub, sub.startsWith("From the other device") && sub.endsWith("tap to copy"));
         assertTrue(((TextView) list.getChildAt(1).findViewById(R.id.nSub)).getText().toString().startsWith("You sent this"));
         shotScrollContent("120_transfer_clipboard", v);
+        shotView(v.findViewById(R.id.notesCard), "120b_clipboard_card");
 
         // tapping a note copies it
         list.getChildAt(0).performClick();
@@ -2340,6 +2341,7 @@ public class UiTest {
         assertEquals(url, hub.driveUrl());
         assertTrue(((TextView) v.findViewById(R.id.driveHelp)).getText().toString().contains("can't change anything"));
         shotScrollContent("121_transfer_drive", v);
+        shotView(v.findViewById(R.id.driveCard), "121b_drive_card");
 
         // the computer can read, but by default not change
         String listing = davCall(hub, "PROPFIND", "", "", "Depth", "1");
@@ -3261,6 +3263,44 @@ public class UiTest {
         tb.eraseColor(0xFFF3F5F8);
         toolsView.draw(new Canvas(tb));
         save(tb, "172_home_tools");
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night-xxhdpi")
+    public void version31ScreensRenderInDarkMode() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity b = openBackup();
+        shotOf(b, "180_dark_backup");
+        makePhotoLibrary();
+        SwipeCleanActivity clean = openClean();
+        shotOf(clean, "181_dark_clean_summary");
+        review(clean, 0);
+        waitUntil(() -> ((android.widget.ImageView) clean.findViewById(R.id.rImage)).getDrawable() != null);
+        settle();
+        shotOf(clean, "182_dark_clean_card");
+        ScanActivity scan = openScan();
+        shotOf(scan, "183_dark_scan_empty");
+        addPage(scan, photoOfAPage("dark1.png", 41));
+        shotOf(scan, "184_dark_scan_page");
+        ContentSearchActivity search = openContentSearch();
+        typeQuery(search, "cafe");
+        shotOf(search, "185_dark_search");
+        launch();
+        selectTab(R.id.nav_transfer);
+        FastShareApp.hub(activity).setDrive(true, storage, true);
+        FastShareApp.hub(activity).addNote("Gate code 4455");
+        settle();
+        shotScrollContent("186_dark_transfer_drive_clipboard", transfer().getView());
+    }
+
+    /** Renders one view at the phone's width, for the guide. */
+    private static void shotView(View v, String name) throws Exception {
+        v.measure(View.MeasureSpec.makeMeasureSpec(W - 64, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        v.layout(0, 0, W - 64, v.getMeasuredHeight());
+        Bitmap b = Bitmap.createBitmap(W - 64, v.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+        b.eraseColor(0xFFF3F5F8);
+        v.draw(new Canvas(b));
+        save(b, name);
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {
