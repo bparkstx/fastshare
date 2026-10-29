@@ -24,8 +24,25 @@ jobs:
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
       - name: Run tests (server, file operations and the app's screens)
         run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Load signing key
+        # FASTSHARE_SIGNING_KEY is "<password>:<base64 keystore>". Without it the APK is signed with
+        # a throwaway debug key and has to be uninstalled before the next update.
+        env:
+          SIGNING_KEY: ${{ secrets.FASTSHARE_SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | cut -d: -f2- | base64 -d > "$RUNNER_TEMP/fastshare.p12"
+            echo "FASTSHARE_KEYSTORE=$RUNNER_TEMP/fastshare.p12" >> "$GITHUB_ENV"
+            echo "FASTSHARE_KEYSTORE_PASSWORD=$(echo "$SIGNING_KEY" | cut -d: -f1)" >> "$GITHUB_ENV"
+            echo "Signing with the FastShare key"
+          else
+            echo "::warning::No FASTSHARE_SIGNING_KEY secret, signing with a temporary debug key"
+          fi
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease
+      - name: Show which key signed the APK
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "DN|SHA-256"
       - uses: actions/upload-artifact@v4
         with:
           name: FastShare-apk

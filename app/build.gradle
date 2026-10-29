@@ -14,11 +14,25 @@ android {
         versionName '2.0'
     }
 
+    signingConfigs {
+        // The release key lives outside the repo. CI passes it in through these variables (from the
+        // FASTSHARE_SIGNING_KEY secret). With the same key every build installs as an update over the
+        // last one. Without them (local builds, forks) the build falls back to the debug key.
+        release {
+            def ksPath = System.getenv('FASTSHARE_KEYSTORE')
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv('FASTSHARE_KEYSTORE_PASSWORD')
+                keyAlias 'fastshare'
+                keyPassword System.getenv('FASTSHARE_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            // Signed with the standard debug key so the APK installs directly (sideloading).
-            signingConfig signingConfigs.debug
+            signingConfig System.getenv('FASTSHARE_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
         }
     }
 
