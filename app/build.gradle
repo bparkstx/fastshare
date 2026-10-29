@@ -87,6 +87,8 @@ dependencies {
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'            // webdav
     implementation 'androidx.work:work-runtime:2.9.1'              // automatic backup
+    implementation 'com.google.mlkit:text-recognition:16.0.1'      // search inside photos (on the phone, models bundled)
+    implementation 'com.google.mlkit:image-labeling:17.0.9'        // search for what a photo shows
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.13'

@@ -3118,6 +3118,151 @@ public class UiTest {
         assertEquals(ScanActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
     }
 
+    // ------------------------------------------------------------------ search inside files
+
+    private ActivityController<ContentSearchActivity> searchController;
+
+    @After
+    public void tearDownContentSearch() {
+        ContentSearchActivity.testRecognizer = null;
+        if (searchController != null) {
+            try { searchController.pause().stop().destroy(); } catch (Exception ignored) { }
+            searchController = null;
+        }
+    }
+
+    private ContentSearchActivity openContentSearch() throws Exception {
+        write("Documents/notes-meeting.txt", 20);
+        Files.write(new File(storage, "Documents/notes-meeting.txt").toPath(), "Meeting with Dr. Okafor about the lease renewal on Friday".getBytes(StandardCharsets.UTF_8));
+        File receipt = writePng("Pictures/IMG_5001.png", 0xFFEEEEEE, 300, 400);
+        File dog = writePng("Pictures/IMG_5002.png", 0xFF99BB77, 400, 300);
+        File blank = writePng("Pictures/IMG_5003.png", 0xFFFFFFFF, 200, 200);
+        ContentSearchActivity.testRecognizer = f -> {
+            if (f.getName().equals("IMG_5001.png")) return new ContentIndexer.Result("Caf\u00e9 Luna\nLatte 4.20\nTotal 12.50\nThank you", java.util.Arrays.asList("Text"));
+            if (f.getName().equals("IMG_5002.png")) return new ContentIndexer.Result("", java.util.Arrays.asList("Dog", "Grass"));
+            if (f.getName().equals("IMG_5003.png")) return new ContentIndexer.Result("", null);
+            throw new IOException("not a picture");
+        };
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        return a;
+    }
+
+    private static void typeQuery(android.app.Activity a, String q) {
+        ((EditText) a.findViewById(R.id.query)).setText(q);
+        for (int i = 0; i < 4; i++) settle();
+    }
+
+    @Test public void searchFindsWordsInPicturesTextFilesAndWhatPhotosShow() throws Exception {
+        ContentSearchActivity a = openContentSearch();
+        TextView status = a.findViewById(R.id.status);
+        assertTrue(status.getText().toString(), status.getText().toString().contains("searchable"));
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Type a word"));
+        shotOf(a, "170_search_start");
+
+        typeQuery(a, "cafe total");
+        assertEquals(java.util.Arrays.asList("IMG_5001.png"), remoteRows(a));
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.contains("Caf\u00e9 Luna"));
+        assertEquals("1 file matches", ((TextView) a.findViewById(R.id.status)).getText().toString());
+        shotOf(a, "171_search_result");
+
+        typeQuery(a, "dog");
+        assertEquals(java.util.Arrays.asList("IMG_5002.png"), remoteRows(a));
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.startsWith("Shows: Dog, Grass"));
+
+        typeQuery(a, "okafor");
+        assertEquals(java.util.Arrays.asList("notes-meeting.txt"), remoteRows(a));
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.contains("Dr. Okafor"));
+
+        typeQuery(a, "zebra");
+        assertTrue(remoteRows(a).isEmpty());
+        assertEquals("Nothing matches that.", ((TextView) a.findViewById(R.id.empty)).getText().toString());
+        typeQuery(a, "");
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Type a word"));
+    }
+
+    @Test public void tappingAResultOpensItAndHoldingShowsItsFolder() throws Exception {
+        ContentSearchActivity a = openContentSearch();
+        typeQuery(a, "latte");
+        layoutOf(a);
+        RecyclerView list = a.findViewById(R.id.list);
+        list.findViewHolderForAdapterPosition(0).itemView.performClick();
+        android.content.Intent next = shadowOf(a).getNextStartedActivity();
+        assertNotNull(next);
+        assertEquals(ViewerActivity.class.getName(), next.getComponent().getClassName());
+        assertTrue(next.getStringExtra(ViewerActivity.EXTRA_PATH).endsWith("IMG_5001.png"));
+
+        list.findViewHolderForAdapterPosition(0).itemView.performLongClick();
+        assertEquals(new File(storage, "Pictures"), Nav.dir);
+        assertTrue(a.isFinishing());
+        Nav.dir = null;
+    }
+
+    @Test public void newFilesAreReadOnTheNextVisitAndOnlyThose() throws Exception {
+        openContentSearch();
+        searchController.pause().stop().destroy();
+        final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        ContentSearchActivity.testRecognizer = f -> {
+            calls.incrementAndGet();
+            return new ContentIndexer.Result("a brand new whiteboard", null);
+        };
+        writePng("Pictures/IMG_5004.png", 0xFF333333, 100, 100);
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        assertEquals("only the new picture was read", 1, calls.get());
+        typeQuery(a, "whiteboard");
+        assertEquals(java.util.Arrays.asList("IMG_5004.png"), remoteRows(a));
+    }
+
+    @Test public void ifPicturesCantBeReadTextFilesStillWork() throws Exception {
+        write("Documents/plain.txt", 5);
+        Files.write(new File(storage, "Documents/plain.txt").toPath(), "grocery list: oat milk".getBytes(StandardCharsets.UTF_8));
+        writePng("Pictures/IMG_6001.png", 0xFF123456, 100, 100);
+        ContentSearchActivity.testRecognizer = f -> { throw new IOException("models missing"); };
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        typeQuery(a, "oat milk");
+        assertEquals(java.util.Arrays.asList("plain.txt"), remoteRows(a));
+    }
+
+    @Test public void searchNeedsFileAccessAndHasATile() throws Exception {
+        Access.testOverride = false;
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Allow file access"));
+        Access.testOverride = true;
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        boolean found = false;
+        for (int r = 0; r < tools.getChildCount() && !found; r++) {
+            android.view.ViewGroup row = (android.view.ViewGroup) tools.getChildAt(r);
+            for (int i = 0; i < row.getChildCount(); i++) {
+                TextView label = row.getChildAt(i).findViewById(R.id.tileLabel);
+                if (label != null && "Search inside".equals(label.getText().toString())) {
+                    row.getChildAt(i).performClick();
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found);
+        assertEquals(ContentSearchActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+        View toolsView = files().getView().findViewById(R.id.toolsGrid);
+        toolsView.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        toolsView.layout(0, 0, W, toolsView.getMeasuredHeight());
+        Bitmap tb = Bitmap.createBitmap(W, toolsView.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+        tb.eraseColor(0xFFF3F5F8);
+        toolsView.draw(new Canvas(tb));
+        save(tb, "172_home_tools");
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
