@@ -53,6 +53,26 @@ public class UiTest {
     private static final int W = 1080;
     private static final int H = 2340;
 
+    /** Stands in for Android's media index so "recent files" and the category lists have something to show. */
+    public static class FakeMedia extends android.content.ContentProvider {
+        static final java.util.List<String> PATHS = new ArrayList<>();
+
+        @Override public boolean onCreate() { return true; }
+
+        private static android.database.Cursor rows() {
+            android.database.MatrixCursor c = new android.database.MatrixCursor(new String[]{"_data"});
+            for (String p : PATHS) c.addRow(new Object[]{p});
+            return c;
+        }
+
+        @Override public android.database.Cursor query(android.net.Uri u, String[] p, android.os.Bundle args, android.os.CancellationSignal cs) { return rows(); }
+        @Override public android.database.Cursor query(android.net.Uri u, String[] p, String sel, String[] a, String sort) { return rows(); }
+        @Override public String getType(android.net.Uri u) { return null; }
+        @Override public android.net.Uri insert(android.net.Uri u, android.content.ContentValues v) { return null; }
+        @Override public int delete(android.net.Uri u, String s, String[] a) { return 0; }
+        @Override public int update(android.net.Uri u, android.content.ContentValues v, String s, String[] a) { return 0; }
+    }
+
     private ActivityController<MainActivity> controller;
     private MainActivity activity;
     private File storage;
@@ -66,6 +86,12 @@ public class UiTest {
         Net.testOverride = new Net.Info(true, new ArrayList<>(Arrays.asList(
                 new Net.Addr("192.168.23.33", "Wi-Fi"), new Net.Addr("10.0.0.7", "Network"))));
         makeSampleFiles();
+        FakeMedia.PATHS.clear();
+        for (String rel : new String[]{"Download/Invoice March.pdf", "DCIM/Camera/IMG_20260102_130000.jpg", "Download/holiday-video.mp4",
+                "Documents/Budget.xlsx", "Music/song.mp3", "DCIM/Camera/IMG_20260101_101010.jpg"}) {
+            FakeMedia.PATHS.add(new File(storage, rel).getPath());
+        }
+        Robolectric.setupContentProvider(FakeMedia.class, "media");
     }
 
     @After
@@ -522,6 +548,74 @@ public class UiTest {
         waitUntil(out::exists);
         assertTrue(out.exists());
         assertTrue(new File(storage, "Download/stored/docs/readme.md").exists());
+    }
+
+    @Test public void homeShowsRecentFilesFromTheMediaIndex() throws Exception {
+        launch();
+        settle();
+        View v = files().getView();
+        android.widget.LinearLayout recent = v.findViewById(R.id.recentList);
+        assertEquals("only the newest five are previewed", 5, recent.getChildCount());
+        assertEquals(View.VISIBLE, v.findViewById(R.id.recentHeader).getVisibility());
+        assertEquals("Invoice March.pdf", ((android.widget.TextView) recent.getChildAt(0).findViewById(R.id.name)).getText().toString());
+        shot("40_home_recent");
+
+        v.findViewById(R.id.recentAll).performClick();
+        settle();
+        MaterialToolbar tb = v.findViewById(R.id.toolbar);
+        assertEquals("Recent files", tb.getTitle().toString());
+        assertEquals("see all lists everything", 6, ((FileAdapter) list().getAdapter()).items().size());
+    }
+
+    @Test public void favoritesCanBeAddedPinnedAndRemoved() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        // pin the open folder
+        MaterialToolbar tb = files().getView().findViewById(R.id.toolbar);
+        assertEquals("Add folder to favorites", tb.getMenu().findItem(R.id.action_pin_folder).getTitle().toString());
+        tb.getMenu().performIdentifierAction(R.id.action_pin_folder, 0);
+        assertEquals("Remove folder from favorites", tb.getMenu().findItem(R.id.action_pin_folder).getTitle().toString());
+        // and a file, from the selection menu
+        longClickRow("notes.txt");
+        assertEquals("Add to favorites", tb.getMenu().findItem(R.id.action_favorite).getTitle().toString());
+        menu(R.id.action_favorite);
+
+        // back on the home screen both are there
+        files().handleBack(); settle();
+        files().handleBack(); settle();
+        View v = files().getView();
+        assertEquals(View.VISIBLE, v.findViewById(R.id.favGrid).getVisibility());
+        android.widget.LinearLayout grid = v.findViewById(R.id.favGrid);
+        java.util.List<String> labels = new ArrayList<>();
+        for (int r = 0; r < grid.getChildCount(); r++) {
+            android.view.ViewGroup row = (android.view.ViewGroup) grid.getChildAt(r);
+            for (int k = 0; k < row.getChildCount(); k++) {
+                View t = row.getChildAt(k).findViewById(R.id.tileLabel);
+                if (t != null) labels.add(((android.widget.TextView) t).getText().toString());
+            }
+        }
+        assertEquals(java.util.Arrays.asList("Download", "notes.txt"), labels);
+        shot("41_home_favorites");
+
+        // tapping a favourite folder opens it; long-pressing removes it
+        android.view.ViewGroup row0 = (android.view.ViewGroup) grid.getChildAt(0);
+        row0.getChildAt(0).performClick();
+        settle();
+        assertEquals("Download", ((MaterialToolbar) v.findViewById(R.id.toolbar)).getTitle().toString());
+        files().handleBack(); settle(); files().handleBack(); settle();
+        ((android.view.ViewGroup) ((android.widget.LinearLayout) v.findViewById(R.id.favGrid)).getChildAt(0)).getChildAt(0).performLongClick();
+        settle();
+        assertEquals(java.util.Collections.singletonList(new File(storage, "Download/notes.txt").getPath()),
+                new Prefs(activity).favorites());
+    }
+
+    @Test public void favoritesThatNoLongerExistAreDropped() throws Exception {
+        new Prefs(RuntimeEnvironment.getApplication()).setFavorites(new ArrayList<>(java.util.Arrays.asList(
+                new File(storage, "Download/gone.txt").getPath(), new File(storage, "Download/notes.txt").getPath())));
+        launch();
+        assertEquals(java.util.Collections.singletonList(new File(storage, "Download/notes.txt").getPath()),
+                new Prefs(activity).favorites());
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {

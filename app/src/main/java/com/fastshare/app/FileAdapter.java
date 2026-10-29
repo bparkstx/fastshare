@@ -130,6 +130,38 @@ final class FileAdapter extends RecyclerView.Adapter<FileAdapter.Holder> {
         });
     }
 
+    /** Icon (or photo preview) for a file in a list that isn't recycled, such as the home screen's recent files. */
+    static void styleIcon(Context ctx, final ImageView icon, FileOps.Item item) {
+        float density = ctx.getResources().getDisplayMetrics().density;
+        int color = Kinds.color(ctx, item.kind);
+        int pad = (int) (10 * density);
+        icon.setBackground(Kinds.badge(color, 12 * density, false));
+        icon.setPadding(pad, pad, pad, pad);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        icon.setImageResource(Kinds.icon(item.kind));
+        icon.setColorFilter(color);
+        icon.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 12 * view.getResources().getDisplayMetrics().density);
+            }
+        });
+        icon.setClipToOutline(true);
+        if (item.kind == FileOps.Kind.IMAGE || item.kind == FileOps.Kind.VIDEO) {
+            Bitmap cached = Thumbs.cached(item.file);
+            Thumbs.Done done = new Thumbs.Done() {
+                @Override public void show(Bitmap b) {
+                    icon.setColorFilter(null);
+                    icon.setPadding(0, 0, 0, 0);
+                    icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                    icon.setBackgroundColor(Color.TRANSPARENT);
+                    icon.setImageBitmap(b);
+                }
+            };
+            if (cached != null) done.show(cached);
+            else Thumbs.load(item.file, item.kind == FileOps.Kind.VIDEO, pad * 9, done);
+        }
+    }
+
     private void showThumb(ImageView icon, Bitmap b) {
         icon.setColorFilter(null);
         icon.setPadding(0, 0, 0, 0);

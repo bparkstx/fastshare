@@ -28,6 +28,8 @@ final class MediaQuery {
                         + " OR mime_type LIKE 'text/%')"),
         APPS("Apps", R.drawable.ic_apk, FileOps.Kind.APK,
                 "mime_type='application/vnd.android.package-archive'"),
+        RECENT("Recent files", R.drawable.ic_clock, FileOps.Kind.OTHER,
+                "(media_type IN (1,2,3) OR mime_type LIKE 'application/%' OR mime_type LIKE 'text/%')"),
         ARCHIVES("Archives", R.drawable.ic_archive, FileOps.Kind.ARCHIVE,
                 "(mime_type='application/zip' OR mime_type='application/x-rar-compressed' OR mime_type='application/vnd.rar'"
                         + " OR mime_type='application/x-7z-compressed' OR mime_type='application/x-tar' OR mime_type='application/gzip')");
@@ -45,6 +47,10 @@ final class MediaQuery {
         }
     }
 
+    /** Keeps app-private caches and our own trash out of every list. */
+    private static final String ALWAYS_EXCLUDE =
+            " AND _data NOT LIKE '%/Android/data/%' AND _data NOT LIKE '%/Android/obb/%' AND _data NOT LIKE '%/.FileBanditTrash/%'";
+
     /** Newest first. Returns an empty list if the index can't be read. */
     static List<FileOps.Item> items(Context ctx, Category cat, boolean showHidden, int limit) {
         List<FileOps.Item> out = new ArrayList<>();
@@ -52,14 +58,15 @@ final class MediaQuery {
         try {
             Uri uri = MediaStore.Files.getContentUri("external");
             Bundle args = new Bundle();
-            args.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, cat.where);
+            String where = "(" + cat.where + ")" + ALWAYS_EXCLUDE + (showHidden ? "" : " AND _data NOT LIKE '%/.%'");
+            args.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, where);
             args.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS,
                     new String[]{MediaStore.MediaColumns.DATE_MODIFIED});
             args.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);
             args.putInt(ContentResolver.QUERY_ARG_LIMIT, limit);
             c = ctx.getContentResolver().query(uri, new String[]{MediaStore.MediaColumns.DATA}, args, null);
             if (c == null) return out;
-            while (c.moveToNext()) {
+            while (c.moveToNext() && out.size() < limit) {
                 String path = c.getString(0);
                 if (path == null) continue;
                 File f = new File(path);
