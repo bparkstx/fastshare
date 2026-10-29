@@ -3,50 +3,123 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a73e8">
 <title>FastShare</title>
 <style>
-  :root { --bg:#f4f5f7; --card:#fff; --text:#15181d; --muted:#667085; --accent:#1a73e8; --line:#e3e6ea; --ok:#1e8e3e; --err:#d93025; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0e1013; --card:#181b20; --text:#eceff3; --muted:#98a2b3; --accent:#6ea8fe; --line:#2a2f37; --ok:#5bd17a; --err:#ff7b72; }
+  :root {
+    --bg:#f3f5f8; --card:#fff; --text:#15181d; --muted:#667085; --accent:#1a73e8; --accent-soft:#e8f0fe;
+    --line:#e3e6ea; --ok:#188038; --ok-soft:#e6f4ea; --err:#d93025; --err-soft:#fce8e6;
   }
-  * { box-sizing: border-box; }
-  body { margin:0; padding:16px; background:var(--bg); color:var(--text);
-         font:16px/1.45 -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
-  main { max-width: 640px; margin: 0 auto; }
-  h1 { font-size: 22px; margin: 4px 0 14px; }
-  h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
-  .btn { display:block; width:100%; padding:14px; border:0; border-radius:10px; background:var(--accent); color:#fff;
-         font-size:16px; font-weight:600; text-align:center; }
-  .btn.alt { background:transparent; color:var(--accent); border:1px solid var(--line); margin-top:8px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1013; --card:#181b20; --text:#eceff3; --muted:#98a2b3; --accent:#6ea8fe; --accent-soft:#1b2a44;
+            --line:#2a2f37; --ok:#5bd17a; --ok-soft:#14301f; --err:#ff7b72; --err-soft:#3b1b19; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; padding:max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+         background:var(--bg); color:var(--text); font:16px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; }
+
+  header { display:flex; align-items:center; gap:12px; margin:4px 0 16px; }
+  .logo { width:44px; height:44px; border-radius:12px; background:var(--accent); display:flex; align-items:center; justify-content:center; flex:none; }
+  .logo svg { width:26px; height:26px; fill:#fff; }
+  h1 { font-size:22px; line-height:1.1; margin:0; }
+  .pill { display:inline-flex; align-items:center; gap:6px; margin-top:4px; font-size:13px; color:var(--muted); }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
+  .pill.ok .dot { background:var(--ok); }
+  .pill.bad .dot { background:var(--err); }
+  .pill.ok { color:var(--ok); }
+  .pill.bad { color:var(--err); }
+
+  .banner { background:var(--err-soft); color:var(--err); border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:15px; display:none; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin-bottom:14px; }
+  .step { display:flex; align-items:center; gap:10px; margin:0 0 4px; }
+  .num { width:26px; height:26px; border-radius:50%; background:var(--accent-soft); color:var(--accent); font-weight:700;
+         display:flex; align-items:center; justify-content:center; font-size:14px; flex:none; }
+  h2 { font-size:18px; margin:0; }
+  .hint { color:var(--muted); font-size:14px; margin:6px 0 14px; }
+
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .btn { display:flex; align-items:center; justify-content:center; gap:8px; min-height:52px; padding:12px; border:0; border-radius:12px;
+         background:var(--accent); color:#fff; font-size:16px; font-weight:600; text-align:center; cursor:pointer; font-family:inherit; }
+  .btn svg { width:20px; height:20px; fill:currentColor; flex:none; }
+  .btn.alt { background:var(--accent-soft); color:var(--accent); }
+  .btn.small { min-height:40px; padding:8px 14px; font-size:15px; border-radius:10px; }
+  a.btn { text-decoration:none; }
+  .btn:active { opacity:.8; }
   input[type=file] { display:none; }
-  .row { padding:10px 0; border-top:1px solid var(--line); }
-  .row:first-child { border-top:0; }
-  .name { word-break: break-all; }
+
+  .row { padding:12px 0; border-top:1px solid var(--line); display:flex; gap:12px; align-items:center; }
+  .row:first-of-type { border-top:0; }
+  .grow { flex:1; min-width:0; }
+  .name { word-break:break-all; font-weight:500; }
   .meta { color:var(--muted); font-size:13px; margin-top:2px; }
-  .bar { height:6px; background:var(--line); border-radius:3px; margin-top:6px; overflow:hidden; }
-  .bar > i { display:block; height:100%; width:0; background:var(--accent); }
-  .done .bar > i { background:var(--ok); }
+  .bar { height:6px; background:var(--line); border-radius:3px; margin-top:8px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .done .bar > i { background:var(--ok); transition:none; }
+  .done .meta { color:var(--ok); }
   .fail .meta { color:var(--err); }
-  a.dl { color:var(--accent); text-decoration:none; font-weight:600; word-break:break-all; }
-  .empty { color:var(--muted); }
+  .empty { color:var(--muted); text-align:center; padding:14px 8px; font-size:15px; }
+  .empty b { color:var(--text); }
+  .actions { display:flex; gap:8px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+  .icon { width:38px; height:38px; border-radius:10px; background:var(--accent-soft); display:flex; align-items:center; justify-content:center; flex:none; }
+  .icon svg { width:22px; height:22px; fill:var(--accent); }
+  .tag { font-size:12px; background:var(--accent-soft); color:var(--accent); padding:1px 8px; border-radius:20px; margin-left:6px; }
+
+  details { color:var(--muted); font-size:14px; }
+  summary { cursor:pointer; font-weight:600; color:var(--text); padding:2px 0; }
+  details ul { padding-left:20px; margin:10px 0 0; }
+  details li { margin-bottom:6px; }
+  .refresh { font-size:12px; color:var(--muted); text-align:right; margin-top:6px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>FastShare</h1>
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M8 5l-5 5 5 5v-3.5h6v-3H8V5zm8 4v3.5h-6v3h6V19l5-5-5-5z"/></svg></div>
+    <div>
+      <h1>FastShare</h1>
+      <div class="pill" id="pill"><span class="dot"></span><span id="pilltext">Connecting&hellip;</span></div>
+    </div>
+  </header>
+
+  <div class="banner" id="lost">
+    Lost connection to the Android phone. Make sure both phones are still on the same Wi-Fi and the FastShare app
+    is open on the Android phone. This page reconnects by itself.
+  </div>
 
   <section class="card">
-    <h2>Send to the Android phone</h2>
-    <label class="btn" for="pick">Choose files</label>
-    <input id="pick" type="file" multiple>
-    <div id="uploads"></div>
+    <div class="step"><span class="num">1</span><h2>Send to the Android phone</h2></div>
+    <p class="hint">Pick what to send. Files are saved on the Android phone in <b>Downloads &rsaquo; FastShare</b>. Keep this page open until the bars turn green.</p>
+    <div class="btns">
+      <label class="btn" for="pickPhotos"><svg viewBox="0 0 24 24"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"/></svg>Photos &amp; videos</label>
+      <label class="btn alt" for="pickFiles"><svg viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>Files app</label>
+    </div>
+    <input id="pickPhotos" type="file" multiple accept="image/*,video/*">
+    <input id="pickFiles" type="file" multiple>
+    <p class="hint" style="margin-bottom:0">Tip: <b>Files app</b> sends photos and videos exactly as they are. <b>Photos &amp; videos</b> may let iOS convert HEIC photos to JPEG.</p>
+    <div id="uploads" style="margin-top:6px"></div>
   </section>
 
   <section class="card">
-    <h2>Get from the Android phone</h2>
-    <div id="files"><div class="empty">Nothing shared yet. On the phone, tap "Choose files to share".</div></div>
-    <button class="btn alt" id="refresh" type="button">Refresh list</button>
+    <div class="step"><span class="num">2</span><h2>Get files from the Android phone</h2></div>
+    <p class="hint">Files the Android phone is sharing show up here. Tap <b>Download</b>, then <b>Download</b> again in the Safari prompt. Find them in the Files app under <b>Downloads</b>.</p>
+    <div id="files"></div>
+    <div class="refresh" id="refreshed"></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Tips for fast, reliable transfers</summary>
+      <ul>
+        <li>Keep both screens on and stay on this page while files are moving.</li>
+        <li>5 GHz Wi-Fi is much faster than 2.4 GHz. On the iPhone: Settings &rsaquo; Wi-Fi &rsaquo; tap your network and check that &ldquo;Low Data Mode&rdquo; is off.</li>
+        <li>To save a photo or video into the iPhone <b>Photos</b> app, tap <b>Save to Photos</b> next to it.</li>
+        <li>If this page stops working, scan the QR code on the Android phone again with the Camera app.</li>
+      </ul>
+    </details>
   </section>
 </main>
 
@@ -54,110 +127,228 @@
 (function () {
   var T = new URLSearchParams(location.search).get('t') || '';
   var MAX_PARALLEL = 3;
+  var $ = function (id) { return document.getElementById(id); };
+  function q(path, extra) { return path + '?t=' + encodeURIComponent(T) + (extra || ''); }
 
   function fmt(b) {
+    if (b < 0) return '';
     if (b < 1000) return b + ' B';
     var u = ['KB','MB','GB','TB'], i = -1;
     while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
-    return b.toFixed(1) + ' ' + u[i];
+    return b.toFixed(b >= 100 ? 0 : 1) + ' ' + u[i];
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
   }
 
-  // ---------- upload (this device -> phone) ----------
-  var queue = [], active = 0;
-  var uploads = document.getElementById('uploads');
+  // ---------- keep the screen awake while transfers run ----------
+  var wake = null;
+  function keepAwake(on) {
+    try {
+      if (on && navigator.wakeLock && !wake) {
+        navigator.wakeLock.request('screen').then(function (l) { wake = l; l.addEventListener('release', function () { wake = null; }); }, function () {});
+      } else if (!on && wake) { wake.release(); wake = null; }
+    } catch (e) {}
+  }
 
-  document.getElementById('pick').addEventListener('change', function (e) {
-    var list = Array.prototype.slice.call(e.target.files);
-    list.forEach(function (f) { enqueue(f); });
-    e.target.value = '';
-    pump();
+  // ---------- connection status ----------
+  var failures = 0;
+  function setPill(cls, text) {
+    $('pill').className = 'pill ' + cls;
+    $('pilltext').textContent = text;
+  }
+  function ping() {
+    var x = new XMLHttpRequest();
+    x.open('GET', q('/api/info'));
+    x.timeout = 4000;
+    x.onload = function () {
+      if (x.status !== 200) return fail();
+      failures = 0;
+      var name = '';
+      try { name = JSON.parse(x.responseText).device || ''; } catch (e) {}
+      setPill('ok', name ? 'Connected to ' + name : 'Connected');
+      $('lost').style.display = 'none';
+    };
+    x.onerror = x.ontimeout = fail;
+    x.send();
+  }
+  function fail() {
+    failures++;
+    if (failures >= 2) {
+      setPill('bad', 'Not connected');
+      $('lost').style.display = 'block';
+    }
+  }
+
+  // ---------- upload (this device -> Android phone) ----------
+  var queue = [], active = 0;
+  var uploads = $('uploads');
+
+  ['pickPhotos', 'pickFiles'].forEach(function (id) {
+    $(id).addEventListener('change', function (e) {
+      Array.prototype.slice.call(e.target.files).forEach(enqueue);
+      e.target.value = '';
+      pump();
+    });
   });
 
   function enqueue(file) {
-    var row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = '<div class="name"></div><div class="meta">Waiting...</div><div class="bar"><i></i></div>';
-    row.querySelector('.name').textContent = file.name;
-    uploads.appendChild(row);
-    queue.push({ file: file, row: row });
+    var row = el('div', 'row');
+    var grow = el('div', 'grow');
+    grow.appendChild(el('div', 'name', file.name));
+    var meta = el('div', 'meta', 'Waiting…');
+    grow.appendChild(meta);
+    var bar = el('div', 'bar');
+    bar.appendChild(el('i'));
+    grow.appendChild(bar);
+    row.appendChild(grow);
+    uploads.insertBefore(row, uploads.firstChild);
+    var job = { file: file, row: row, meta: meta, bar: bar.firstChild, actions: null };
+    queue.push(job);
   }
 
   function pump() {
     while (active < MAX_PARALLEL && queue.length) {
       var job = queue.shift();
       active++;
-      send(job.file, job.row, function () { active--; pump(); });
+      keepAwake(true);
+      send(job, function () { active--; if (!active && !queue.length) keepAwake(false); pump(); });
     }
   }
 
-  function send(file, row, done) {
-    var meta = row.querySelector('.meta'), bar = row.querySelector('.bar > i');
+  function send(job, done) {
+    var file = job.file, row = job.row, meta = job.meta, bar = job.bar;
+    row.classList.remove('fail', 'done');
+    if (job.actions) { job.actions.remove(); job.actions = null; }
     var xhr = new XMLHttpRequest();
     var t0 = performance.now();
-    xhr.open('POST', '/up?t=' + encodeURIComponent(T) + '&name=' + encodeURIComponent(file.name));
+    xhr.open('POST', q('/up', '&name=' + encodeURIComponent(file.name)));
     xhr.upload.onprogress = function (e) {
       if (!e.lengthComputable) return;
       var sec = Math.max((performance.now() - t0) / 1000, 0.001);
       bar.style.width = (e.loaded / e.total * 100).toFixed(1) + '%';
-      meta.textContent = fmt(e.loaded) + ' of ' + fmt(e.total) + ' - ' + (e.loaded / 1e6 / sec).toFixed(1) + ' MB/s';
+      meta.textContent = fmt(e.loaded) + ' of ' + fmt(e.total) + ' · ' + (e.loaded / 1e6 / sec).toFixed(1) + ' MB/s';
     };
+    function failed(msg) {
+      row.classList.add('fail');
+      meta.textContent = msg;
+      var a = el('div', 'actions');
+      var b = el('button', 'btn small alt', 'Retry');
+      b.type = 'button';
+      b.onclick = function () { queue.push(job); pump(); };
+      a.appendChild(b);
+      row.appendChild(a);
+      job.actions = a;
+      done();
+    }
     xhr.onload = function () {
       if (xhr.status === 200) {
         var sec = Math.max((performance.now() - t0) / 1000, 0.001);
         row.classList.add('done');
         bar.style.width = '100%';
-        meta.textContent = 'Sent ' + fmt(file.size) + ' in ' + sec.toFixed(1) + 's (' + (file.size / 1e6 / sec).toFixed(1) + ' MB/s)';
+        meta.textContent = '✓ Sent ' + fmt(file.size) + ' in ' + sec.toFixed(1) + ' s (' + (file.size / 1e6 / sec).toFixed(1) + ' MB/s)';
+        done();
       } else {
-        row.classList.add('fail');
-        meta.textContent = 'Failed (' + xhr.status + ')';
+        failed('Failed (' + xhr.status + ')');
       }
-      done();
     };
-    xhr.onerror = xhr.ontimeout = function () {
-      row.classList.add('fail');
-      meta.textContent = 'Connection lost';
-      done();
-    };
+    xhr.onerror = xhr.ontimeout = function () { failed('Connection lost'); };
     xhr.send(file);
   }
 
-  // ---------- download (phone -> this device) ----------
-  var filesEl = document.getElementById('files');
+  // ---------- download (Android phone -> this device) ----------
+  var MIME = { jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', webp:'image/webp', heic:'image/heic',
+               mp4:'video/mp4', mov:'video/quicktime', m4v:'video/mp4', '3gp':'video/3gpp' };
+  function mimeOf(name) { return MIME[(name.split('.').pop() || '').toLowerCase()] || ''; }
+  var canShareFiles = !!(navigator.canShare && navigator.share);
+  var saving = {};   // id -> { blob }
+
+  var filesEl = $('files');
+  var lastSig = null;
+
+  function render(list) {
+    var sig = JSON.stringify(list);
+    if (sig === lastSig) return;
+    lastSig = sig;
+    filesEl.innerHTML = '';
+    if (!list.length) {
+      var e = el('div', 'empty');
+      e.innerHTML = 'Nothing shared yet.<br>On the Android phone open the <b>Files</b> tab, long-press a file, then tap <b>Send</b>.';
+      filesEl.appendChild(e);
+      return;
+    }
+    list.forEach(function (f) {
+      var row = el('div', 'row');
+      var grow = el('div', 'grow');
+      var n = el('div', 'name', f.name);
+      if (f.dir) n.appendChild(el('span', 'tag', 'folder as zip'));
+      grow.appendChild(n);
+      grow.appendChild(el('div', 'meta', f.size >= 0 ? fmt(f.size) : 'Size shown after download'));
+      row.appendChild(grow);
+
+      var actions = el('div', 'actions');
+      var a = el('a', 'btn small', 'Download');
+      a.href = '/dl/' + f.id + '?t=' + encodeURIComponent(T);
+      a.setAttribute('download', f.name);
+      actions.appendChild(a);
+
+      var mime = mimeOf(f.name);
+      if (canShareFiles && mime && !f.dir) {
+        var s = el('button', 'btn small alt', 'Save to Photos');
+        s.type = 'button';
+        s.onclick = function () { saveToPhotos(f, mime, s, grow.lastChild); };
+        actions.appendChild(s);
+      }
+      row.appendChild(actions);
+      filesEl.appendChild(row);
+    });
+  }
+
+  // iOS only lets a page open the share sheet straight after a tap, so: tap 1 downloads, tap 2 opens "Save Image/Video".
+  function saveToPhotos(f, mime, btn, meta) {
+    var held = saving[f.id];
+    if (held) {
+      var file = new File([held.blob], f.name, { type: mime });
+      if (navigator.canShare && !navigator.canShare({ files: [file] })) { meta.textContent = 'This file type can’t be saved to Photos. Use Download.'; return; }
+      navigator.share({ files: [file] }).then(function () { btn.textContent = 'Saved'; }, function () {});
+      return;
+    }
+    btn.disabled = true;
+    var x = new XMLHttpRequest();
+    x.open('GET', '/dl/' + f.id + '?t=' + encodeURIComponent(T));
+    x.responseType = 'blob';
+    x.onprogress = function (e) {
+      if (e.lengthComputable) { btn.textContent = Math.round(e.loaded / e.total * 100) + '%'; }
+    };
+    x.onload = function () {
+      btn.disabled = false;
+      if (x.status !== 200) { btn.textContent = 'Save to Photos'; meta.textContent = 'Download failed'; return; }
+      saving[f.id] = { blob: x.response };
+      btn.textContent = 'Tap to save';
+    };
+    x.onerror = function () { btn.disabled = false; btn.textContent = 'Save to Photos'; meta.textContent = 'Connection lost'; };
+    x.send();
+  }
 
   function loadFiles() {
     var x = new XMLHttpRequest();
-    x.open('GET', '/api/files?t=' + encodeURIComponent(T));
+    x.open('GET', q('/api/files'));
+    x.timeout = 4000;
     x.onload = function () {
       if (x.status !== 200) return;
       var list = [];
       try { list = JSON.parse(x.responseText); } catch (e) { return; }
-      filesEl.innerHTML = '';
-      if (!list.length) {
-        filesEl.innerHTML = '<div class="empty">Nothing shared yet. On the phone, tap "Choose files to share".</div>';
-        return;
-      }
-      list.forEach(function (f) {
-        var row = document.createElement('div');
-        row.className = 'row';
-        var a = document.createElement('a');
-        a.className = 'dl';
-        a.href = '/dl/' + f.id + '?t=' + encodeURIComponent(T);
-        a.setAttribute('download', f.name);
-        a.textContent = f.name;
-        var m = document.createElement('div');
-        m.className = 'meta';
-        m.textContent = f.size >= 0 ? fmt(f.size) : '';
-        row.appendChild(a);
-        row.appendChild(m);
-        filesEl.appendChild(row);
-      });
+      render(list);
+      $('refreshed').textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
     };
     x.send();
   }
 
-  document.getElementById('refresh').addEventListener('click', loadFiles);
-  loadFiles();
-  setInterval(loadFiles, 4000);
+  ping(); loadFiles();
+  setInterval(function () { ping(); loadFiles(); }, 3000);
 })();
 </script>
 </body>

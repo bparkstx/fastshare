@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
   workflow_dispatch:
 
 permissions:
@@ -22,16 +22,55 @@ jobs:
           SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+      - name: Run tests (server, file operations and the app's screens)
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Load signing key
+        # FASTSHARE_SIGNING_KEY is "<password>:<base64 keystore>". Without it the APK is signed with
+        # a throwaway debug key and has to be uninstalled before the next update.
+        env:
+          SIGNING_KEY: ${{ secrets.FASTSHARE_SIGNING_KEY }}
+        run: |
+          if [ -n "$SIGNING_KEY" ]; then
+            echo "$SIGNING_KEY" | cut -d: -f2- | base64 -d > "$RUNNER_TEMP/fastshare.p12"
+            echo "FASTSHARE_KEYSTORE=$RUNNER_TEMP/fastshare.p12" >> "$GITHUB_ENV"
+            echo "FASTSHARE_KEYSTORE_PASSWORD=$(echo "$SIGNING_KEY" | cut -d: -f1)" >> "$GITHUB_ENV"
+            echo "Signing with the FastShare key"
+          else
+            echo "::warning::No FASTSHARE_SIGNING_KEY secret, signing with a temporary debug key"
+          fi
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease
+      - name: Show which key signed the APK
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "DN|SHA-256"
       - uses: actions/upload-artifact@v4
         with:
           name: FastShare-apk
           path: app/build/outputs/apk/release/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screen-previews
+          path: app/build/shots/*.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: app/build/reports/tests
+          if-no-files-found: ignore
       - name: Publish APK to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk FastShare.apk
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest FastShare.apk --title "FastShare APK" --notes "Latest build. Download FastShare.apk on your Android phone and open it to install."
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            gh release delete latest --yes --cleanup-tag || true
+            gh release create latest FastShare.apk --target "$GITHUB_SHA" --title "FastShare APK" \
+              --notes "Latest build. Download FastShare.apk on your Android phone and open it to install."
+          else
+            gh release delete preview --yes --cleanup-tag || true
+            gh release create preview FastShare.apk --target "$GITHUB_SHA" --prerelease \
+              --title "FastShare preview ($GITHUB_REF_NAME)" \
+              --notes "Test build from branch $GITHUB_REF_NAME. Not the main release."
+          fi

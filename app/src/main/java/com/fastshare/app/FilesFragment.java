@@ -1,0 +1,928 @@
+package com.fastshare.app;
+
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.StatFs;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
+import android.provider.Settings;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
+import com.google.android.material.snackbar.Snackbar;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/** The file manager tab. */
+public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
+
+    /** Files waiting to be pasted. Shared so it survives leaving and re-entering the tab. */
+    private static final List<File> clipboard = new ArrayList<>();
+    private static boolean clipboardCut;
+
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final Set<String> selected = new LinkedHashSet<>();
+    private AtomicBoolean loadCancel = new AtomicBoolean();
+    private int gen;
+
+    private Prefs prefs;
+    private ShareHub hub;
+    private FileAdapter adapter;
+
+    private MaterialToolbar toolbar;
+    private View searchRow;
+    private EditText searchInput;
+    private View crumbScroll;
+    private LinearLayout crumbs;
+    private View home;
+    private RecyclerView list;
+    private View empty;
+    private TextView emptyText;
+    private View permScreen;
+    private FloatingActionButton fab;
+    private View pasteBar;
+    private TextView pasteText;
+    private View pasteGo;
+
+    // where we are: home (all null), a real folder, a category listing, or search results
+    private File currentDir;
+    private MediaQuery.Category category;
+    private String query;
+    private boolean searchOpen;
+
+    // ------------------------------------------------------------------ lifecycle
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle state) {
+        return inflater.inflate(R.layout.fragment_files, container, false);
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View v, @Nullable Bundle state) {
+        super.onViewCreated(v, state);
+        prefs = new Prefs(requireContext());
+        hub = FastShareApp.hub(requireContext());
+
+        toolbar = v.findViewById(R.id.toolbar);
+        searchRow = v.findViewById(R.id.searchRow);
+        searchInput = v.findViewById(R.id.searchInput);
+        crumbScroll = v.findViewById(R.id.crumbScroll);
+        crumbs = v.findViewById(R.id.crumbs);
+        home = v.findViewById(R.id.home);
+        list = v.findViewById(R.id.list);
+        empty = v.findViewById(R.id.empty);
+        emptyText = v.findViewById(R.id.emptyText);
+        permScreen = v.findViewById(R.id.permScreen);
+        fab = v.findViewById(R.id.fab);
+        pasteBar = v.findViewById(R.id.pasteBar);
+        pasteText = v.findViewById(R.id.pasteText);
+        pasteGo = v.findViewById(R.id.pasteGo);
+
+        adapter = new FileAdapter(requireContext(), selected, this);
+        list.setLayoutManager(new LinearLayoutManager(requireContext()));
+        list.setAdapter(adapter);
+
+        toolbar.setNavigationOnClickListener(x -> {
+            if (!selected.isEmpty()) clearSelection();
+            else if (searchOpen) closeSearch();
+            else goUp();
+        });
+        toolbar.setOnMenuItemClickListener(this::onMenu);
+        searchInput.setOnEditorActionListener((tv, action, ev) -> {
+            if (action == EditorInfo.IME_ACTION_SEARCH || action == EditorInfo.IME_ACTION_DONE) {
+                runSearch(searchInput.getText().toString());
+                hideKeyboard();
+                return true;
+            }
+            return false;
+        });
+        fab.setOnClickListener(x -> showCreateDialog());
+        v.findViewById(R.id.pasteCancel).setOnClickListener(x -> {
+            clipboard.clear();
+            render();
+        });
+        pasteGo.setOnClickListener(x -> paste());
+        v.findViewById(R.id.permButton).setOnClickListener(x -> askForAccess());
+        v.findViewById(R.id.storageCard).setOnClickListener(x -> openDir(primaryRoot()));
+
+        render();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (getView() != null && !isHidden()) render();
+    }
+
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden) render();
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        loadCancel.set(true);
+        gen++;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        io.shutdownNow();
+    }
+
+    // ------------------------------------------------------------------ storage helpers
+
+    private static File primaryRoot() {
+        return Environment.getExternalStorageDirectory();
+    }
+
+    private List<File> roots() {
+        List<File> out = new ArrayList<>();
+        out.add(primaryRoot());
+        try {
+            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
+            for (StorageVolume sv : sm.getStorageVolumes()) {
+                File d = sv.getDirectory();
+                if (d != null && !sv.isPrimary() && Environment.MEDIA_MOUNTED.equals(sv.getState())) out.add(d);
+            }
+        } catch (Exception ignored) { }
+        return out;
+    }
+
+    private File rootOf(File f) {
+        File best = primaryRoot();
+        int bestLen = -1;
+        for (File r : roots()) {
+            String rp = r.getPath();
+            if ((f.getPath().equals(rp) || f.getPath().startsWith(rp + "/")) && rp.length() > bestLen) {
+                best = r;
+                bestLen = rp.length();
+            }
+        }
+        return best;
+    }
+
+    private String rootLabel(File root) {
+        if (root.equals(primaryRoot())) return "Internal storage";
+        try {
+            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
+            for (StorageVolume sv : sm.getStorageVolumes()) {
+                if (root.equals(sv.getDirectory())) return sv.getDescription(requireContext());
+            }
+        } catch (Exception ignored) { }
+        return root.getName();
+    }
+
+    private static boolean hasAccess() {
+        return Access.allFiles();
+    }
+
+    private void askForAccess() {
+        Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:" + requireContext().getPackageName()));
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+        }
+    }
+
+    // ------------------------------------------------------------------ navigation
+
+    public void openDir(File dir) {
+        currentDir = dir;
+        category = null;
+        query = null;
+        searchOpen = false;
+        selected.clear();
+        render();
+    }
+
+    private void openCategory(MediaQuery.Category c) {
+        currentDir = null;
+        category = c;
+        query = null;
+        searchOpen = false;
+        selected.clear();
+        render();
+    }
+
+    private void goHome() {
+        currentDir = null;
+        category = null;
+        query = null;
+        searchOpen = false;
+        selected.clear();
+        render();
+    }
+
+    private void goUp() {
+        if (category != null || currentDir == null) {
+            goHome();
+            return;
+        }
+        File parent = currentDir.getParentFile();
+        if (currentDir.equals(rootOf(currentDir)) || parent == null) goHome();
+        else openDir(parent);
+    }
+
+    /** Called by the activity for the system Back button. Returns true if it was used here. */
+    public boolean handleBack() {
+        if (!isAdded() || isHidden() || getView() == null) return false;
+        if (!selected.isEmpty()) {
+            clearSelection();
+            return true;
+        }
+        if (searchOpen) {
+            closeSearch();
+            return true;
+        }
+        if (hasAccess() && (currentDir != null || category != null)) {
+            goUp();
+            return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------ rendering
+
+    private void render() {
+        if (!isAdded() || getView() == null) return;
+        boolean access = hasAccess();
+        permScreen.setVisibility(access ? View.GONE : View.VISIBLE);
+        if (!access) {
+            home.setVisibility(View.GONE);
+            list.setVisibility(View.GONE);
+            empty.setVisibility(View.GONE);
+            crumbScroll.setVisibility(View.GONE);
+            searchRow.setVisibility(View.GONE);
+            pasteBar.setVisibility(View.GONE);
+            fab.hide();
+            toolbar.getMenu().clear();
+            toolbar.setNavigationIcon(null);
+            toolbar.setTitle("Files");
+            return;
+        }
+
+        boolean atHome = currentDir == null && category == null && query == null;
+        home.setVisibility(atHome ? View.VISIBLE : View.GONE);
+        list.setVisibility(atHome ? View.GONE : View.VISIBLE);
+        empty.setVisibility(View.GONE);
+        searchRow.setVisibility(searchOpen ? View.VISIBLE : View.GONE);
+        boolean inFolder = currentDir != null && category == null && query == null;
+        crumbScroll.setVisibility(inFolder ? View.VISIBLE : View.GONE);
+        if (inFolder) buildCrumbs();
+        if (inFolder && selected.isEmpty()) fab.show(); else fab.hide();
+        updatePasteBar();
+        updateToolbar();
+        if (atHome) refreshHome(); else reload();
+    }
+
+    private void updatePasteBar() {
+        if (clipboard.isEmpty()) {
+            pasteBar.setVisibility(View.GONE);
+            return;
+        }
+        pasteBar.setVisibility(View.VISIBLE);
+        String verb = clipboardCut ? "move" : "copy";
+        boolean canPaste = currentDir != null && category == null && query == null;
+        pasteText.setText(canPaste
+                ? Fmt.plural(clipboard.size(), "item", "items") + " to " + verb
+                : "Open a folder to " + verb + " " + Fmt.plural(clipboard.size(), "item", "items") + " into");
+        pasteGo.setEnabled(canPaste);
+    }
+
+    private void updateToolbar() {
+        Menu m = toolbar.getMenu();
+        m.clear();
+        if (!selected.isEmpty()) {
+            toolbar.inflateMenu(R.menu.files_selection);
+            toolbar.setTitle(String.valueOf(selected.size()));
+            toolbar.setNavigationIcon(R.drawable.ic_close);
+            toolbar.setNavigationContentDescription("Cancel selection");
+            boolean one = selected.size() == 1;
+            m.findItem(R.id.action_rename).setVisible(one);
+            File f = one ? new File(selected.iterator().next()) : null;
+            m.findItem(R.id.action_extract).setVisible(one && f != null && f.isFile()
+                    && "zip".equals(FileOps.extension(f.getName())));
+            return;
+        }
+        toolbar.inflateMenu(R.menu.files_main);
+        m.findItem(R.id.action_hidden).setChecked(prefs.showHidden());
+        boolean atHome = currentDir == null && category == null && query == null;
+        m.findItem(R.id.action_sort).setVisible(!atHome && query == null && category == null);
+        if (atHome) {
+            toolbar.setTitle("Files");
+            toolbar.setNavigationIcon(null);
+        } else {
+            String title;
+            if (query != null) title = "Results for “" + query + "”";
+            else if (category != null) title = category.title;
+            else title = currentDir.equals(rootOf(currentDir)) ? rootLabel(currentDir) : currentDir.getName();
+            toolbar.setTitle(title);
+            toolbar.setNavigationIcon(R.drawable.ic_back);
+            toolbar.setNavigationContentDescription("Back");
+        }
+    }
+
+    private void buildCrumbs() {
+        crumbs.removeAllViews();
+        File root = rootOf(currentDir);
+        List<File> chain = new ArrayList<>();
+        for (File f = currentDir; f != null; f = f.getParentFile()) {
+            chain.add(0, f);
+            if (f.equals(root)) break;
+        }
+        for (int i = 0; i < chain.size(); i++) {
+            final File f = chain.get(i);
+            if (i > 0) {
+                ImageView sep = new ImageView(requireContext());
+                sep.setImageResource(R.drawable.ic_chevron);
+                sep.setColorFilter(ContextCompat.getColor(requireContext(), R.color.fs_muted));
+                crumbs.addView(sep, new LinearLayout.LayoutParams(dp(18), dp(18)));
+            }
+            TextView t = new TextView(requireContext());
+            t.setText(i == 0 ? rootLabel(root) : f.getName());
+            t.setTextSize(14);
+            boolean last = i == chain.size() - 1;
+            t.setTextColor(ContextCompat.getColor(requireContext(), last ? R.color.fs_text : R.color.fs_primary));
+            if (last) t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+            t.setPadding(dp(6), dp(8), dp(6), dp(8));
+            if (!last) t.setOnClickListener(x -> openDir(f));
+            crumbs.addView(t);
+        }
+        crumbScroll.post(() -> ((android.widget.HorizontalScrollView) crumbScroll).fullScroll(View.FOCUS_RIGHT));
+    }
+
+    private int dp(int v) {
+        return (int) (v * getResources().getDisplayMetrics().density);
+    }
+
+    // ------------------------------------------------------------------ loading
+
+    private void reload() {
+        final int g = ++gen;
+        final File dir = currentDir;
+        final MediaQuery.Category cat = category;
+        final String q = query;
+        final boolean hidden = prefs.showHidden();
+        final FileOps.Sort sort = prefs.sort();
+        final boolean asc = prefs.ascending();
+        final Context appCtx = requireContext().getApplicationContext();
+        loadCancel.set(true);                 // stop any search still walking folders
+        final AtomicBoolean myCancel = new AtomicBoolean();
+        loadCancel = myCancel;
+        try {
+            io.execute(() -> {
+                List<FileOps.Item> out;
+                if (q != null) {
+                    out = FileOps.search(dir != null ? dir : primaryRoot(), q, hidden, 500, myCancel);
+                } else if (cat != null) {
+                    out = MediaQuery.items(appCtx, cat, hidden, 1000);
+                } else {
+                    out = FileOps.list(dir, hidden, sort, asc);
+                }
+                final List<FileOps.Item> result = out;
+                ui.post(() -> {
+                    if (g != gen || !isAdded() || getView() == null) return;
+                    Set<String> present = new HashSet<>();
+                    for (FileOps.Item it : result) present.add(it.file.getPath());
+                    if (selected.retainAll(present)) updateToolbar();
+                    adapter.setItems(result, q != null || cat != null);
+                    if (result.isEmpty()) {
+                        emptyText.setText(q != null ? "No files match “" + q + "”"
+                                : cat != null ? "No " + cat.title.toLowerCase() + " found" : "This folder is empty");
+                        empty.setVisibility(View.VISIBLE);
+                    } else {
+                        empty.setVisibility(View.GONE);
+                    }
+                });
+            });
+        } catch (Exception ignored) { }
+    }
+
+    // ------------------------------------------------------------------ home screen
+
+    private void refreshHome() {
+        View v = getView();
+        if (v == null) return;
+        File root = primaryRoot();
+
+        TextView title = v.findViewById(R.id.storageTitle);
+        TextView sub = v.findViewById(R.id.storageSub);
+        LinearProgressIndicator bar = v.findViewById(R.id.storageBar);
+        title.setText("Internal storage");
+        try {
+            StatFs fs = new StatFs(root.getPath());
+            long total = fs.getTotalBytes();
+            long free = fs.getAvailableBytes();
+            if (total > 0) {
+                long used = total - free;
+                sub.setText(Fmt.bytes(used) + " used of " + Fmt.bytes(total) + "  ·  " + Fmt.bytes(free) + " free");
+                bar.setProgress((int) (used * 1000 / total));
+                bar.setVisibility(View.VISIBLE);
+            } else {
+                sub.setText("");
+                bar.setVisibility(View.GONE);
+            }
+        } catch (Exception e) {
+            sub.setText("");
+            bar.setVisibility(View.GONE);
+        }
+
+        LinearLayout quick = v.findViewById(R.id.quickGrid);
+        quick.removeAllViews();
+        List<Object[]> tiles = new ArrayList<>();
+        addQuick(tiles, "Downloads", R.drawable.ic_download, R.color.kind_document, new File(root, "Download"), true);
+        addQuick(tiles, "Camera", R.drawable.ic_camera, R.color.kind_image, new File(root, "DCIM/Camera"), false);
+        addQuick(tiles, "Pictures", R.drawable.ic_image, R.color.kind_image, new File(root, "Pictures"), false);
+        addQuick(tiles, "Screenshots", R.drawable.ic_phone, R.color.kind_video, new File(root, "Pictures/Screenshots"), false);
+        addQuick(tiles, "Documents", R.drawable.ic_doc, R.color.kind_document, new File(root, "Documents"), false);
+        addQuick(tiles, "Music", R.drawable.ic_audio, R.color.kind_audio, new File(root, "Music"), false);
+        addQuick(tiles, "Movies", R.drawable.ic_video, R.color.kind_video, new File(root, "Movies"), false);
+        addQuick(tiles, "From iPhone", R.drawable.ic_swap, R.color.kind_apk, new File(root, "Download/FastShare"), true);
+        fillGrid(quick, tiles, 4);
+
+        LinearLayout cats = v.findViewById(R.id.catGrid);
+        cats.removeAllViews();
+        List<Object[]> catTiles = new ArrayList<>();
+        for (final MediaQuery.Category c : MediaQuery.Category.values()) {
+            catTiles.add(new Object[]{c.title, c.icon, Kinds.color(requireContext(), c.kind), (Runnable) () -> openCategory(c)});
+        }
+        fillGrid(cats, catTiles, 3);
+
+        LinearLayout vols = v.findViewById(R.id.volumes);
+        vols.removeAllViews();
+        List<File> all = roots();
+        v.findViewById(R.id.volumesTitle).setVisibility(all.size() > 1 ? View.VISIBLE : View.GONE);
+        for (int i = 1; i < all.size(); i++) {
+            final File r = all.get(i);
+            View row = LayoutInflater.from(requireContext()).inflate(R.layout.item_volume, vols, false);
+            ((TextView) row.findViewById(R.id.volName)).setText(rootLabel(r));
+            try {
+                StatFs fs = new StatFs(r.getPath());
+                ((TextView) row.findViewById(R.id.volSub)).setText(Fmt.bytes(fs.getAvailableBytes()) + " free of " + Fmt.bytes(fs.getTotalBytes()));
+            } catch (Exception ignored) { }
+            row.setOnClickListener(x -> openDir(r));
+            vols.addView(row);
+        }
+    }
+
+    private void addQuick(List<Object[]> tiles, String label, int icon, int colorRes, final File dir, boolean always) {
+        if (!always && !dir.isDirectory()) return;
+        tiles.add(new Object[]{label, icon, ContextCompat.getColor(requireContext(), colorRes), (Runnable) () -> {
+            if (!dir.exists()) dir.mkdirs();
+            openDir(dir);
+        }});
+    }
+
+    private void fillGrid(LinearLayout grid, List<Object[]> tiles, int perRow) {
+        LayoutInflater inf = LayoutInflater.from(requireContext());
+        LinearLayout row = null;
+        for (int i = 0; i < tiles.size(); i++) {
+            if (i % perRow == 0) {
+                row = new LinearLayout(requireContext());
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                grid.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+            Object[] t = tiles.get(i);
+            View tile = inf.inflate(R.layout.item_tile, row, false);
+            ImageView icon = tile.findViewById(R.id.tileIcon);
+            icon.setImageResource((Integer) t[1]);
+            icon.setColorFilter((Integer) t[2]);
+            icon.setBackground(Kinds.badge((Integer) t[2], dp(26), true));
+            ((TextView) tile.findViewById(R.id.tileLabel)).setText((String) t[0]);
+            final Runnable action = (Runnable) t[3];
+            tile.setOnClickListener(x -> action.run());
+            row.addView(tile);
+        }
+        // keep the last row's tiles the same width as the others
+        if (row != null) {
+            for (int k = row.getChildCount(); k < perRow; k++) {
+                View filler = new View(requireContext());
+                row.addView(filler, new LinearLayout.LayoutParams(0, 1, 1f));
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ selection and clicks
+
+    @Override
+    public void onClick(FileOps.Item item) {
+        if (!selected.isEmpty()) {
+            toggle(item);
+            return;
+        }
+        if (item.dir) {
+            openDir(item.file);
+        } else if ("zip".equals(FileOps.extension(item.name))) {
+            final File zip = item.file;
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle(item.name)
+                    .setItems(new String[]{"Extract here", "Open with another app"}, (d, which) -> {
+                        if (which == 0) extract(zip); else FileActions.open(requireActivity(), zip);
+                    }).show();
+        } else {
+            FileActions.open(requireActivity(), item.file);
+        }
+    }
+
+    @Override
+    public void onLongClick(FileOps.Item item) {
+        toggle(item);
+    }
+
+    private void toggle(FileOps.Item item) {
+        String p = item.file.getPath();
+        if (!selected.remove(p)) selected.add(p);
+        selectionChanged();
+    }
+
+    private void selectionChanged() {
+        adapter.notifyDataSetChanged();
+        updateToolbar();
+        boolean inFolder = currentDir != null && category == null && query == null;
+        if (inFolder && selected.isEmpty()) fab.show(); else fab.hide();
+    }
+
+    private void clearSelection() {
+        selected.clear();
+        selectionChanged();
+    }
+
+    private List<File> selectedFiles() {
+        List<File> out = new ArrayList<>();
+        for (String p : selected) out.add(new File(p));
+        return out;
+    }
+
+    // ------------------------------------------------------------------ toolbar actions
+
+    private boolean onMenu(MenuItem mi) {
+        int id = mi.getItemId();
+        if (id == R.id.action_search) {
+            openSearch();
+        } else if (id == R.id.action_sort) {
+            showSortDialog();
+        } else if (id == R.id.action_hidden) {
+            prefs.setShowHidden(!prefs.showHidden());
+            render();
+        } else if (id == R.id.action_refresh) {
+            render();
+        } else if (id == R.id.action_send) {
+            sendToIphone();
+        } else if (id == R.id.action_copy || id == R.id.action_cut) {
+            clipboard.clear();
+            clipboard.addAll(selectedFiles());
+            clipboardCut = id == R.id.action_cut;
+            Toast.makeText(requireContext(), "Open the destination folder, then tap Paste here", Toast.LENGTH_LONG).show();
+            clearSelection();
+            updatePasteBar();
+        } else if (id == R.id.action_delete) {
+            confirmDelete(selectedFiles());
+        } else if (id == R.id.action_select_all) {
+            for (FileOps.Item it : adapter.items()) selected.add(it.file.getPath());
+            selectionChanged();
+        } else if (id == R.id.action_share) {
+            FileActions.share(requireActivity(), selectedFiles());
+        } else if (id == R.id.action_rename) {
+            showRenameDialog(new File(selected.iterator().next()));
+        } else if (id == R.id.action_extract) {
+            extract(new File(selected.iterator().next()));
+        } else if (id == R.id.action_details) {
+            showDetails(selectedFiles());
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    private void sendToIphone() {
+        List<File> files = selectedFiles();
+        hub.start();
+        hub.addFiles(files);
+        clearSelection();
+        Toast.makeText(requireContext(),
+                "Added " + Fmt.plural(files.size(), "item", "items") + ". Now open the link on the iPhone.", Toast.LENGTH_LONG).show();
+        ((MainActivity) requireActivity()).showTransfer();
+    }
+
+    // ------------------------------------------------------------------ search
+
+    private void openSearch() {
+        searchOpen = true;
+        searchRow.setVisibility(View.VISIBLE);
+        searchInput.setText(query == null ? "" : query);
+        searchInput.setHint(currentDir != null ? "Search in " + currentDir.getName() : "Search all files");
+        searchInput.requestFocus();
+        InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    private void runSearch(String text) {
+        String q = text == null ? "" : text.trim();
+        if (q.isEmpty()) return;
+        query = q;
+        selected.clear();
+        render();
+    }
+
+    private void closeSearch() {
+        searchOpen = false;
+        hideKeyboard();
+        boolean hadResults = query != null;
+        query = null;
+        if (hadResults) selected.clear();
+        render();
+    }
+
+    private void hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) requireContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+    }
+
+    // ------------------------------------------------------------------ dialogs
+
+    private void showSortDialog() {
+        final String[] labels = {"Name (A to Z)", "Name (Z to A)", "Newest first", "Oldest first",
+                "Largest first", "Smallest first", "Type"};
+        final FileOps.Sort[] sorts = {FileOps.Sort.NAME, FileOps.Sort.NAME, FileOps.Sort.DATE, FileOps.Sort.DATE,
+                FileOps.Sort.SIZE, FileOps.Sort.SIZE, FileOps.Sort.TYPE};
+        final boolean[] asc = {true, false, false, true, false, true, true};
+        int checked = 0;
+        for (int i = 0; i < sorts.length; i++) {
+            if (sorts[i] == prefs.sort() && asc[i] == prefs.ascending()) checked = i;
+        }
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Sort by")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    prefs.setSort(sorts[which], asc[which]);
+                    d.dismiss();
+                    render();
+                }).show();
+    }
+
+    private void showCreateDialog() {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setItems(new String[]{"New folder", "New text file"}, (d, which) -> {
+                    if (which == 0) askName("New folder", "Folder name", "", name -> FileOps.newFolder(currentDir, name));
+                    else askName("New text file", "File name", "note.txt", name -> {
+                        String err = FileOps.checkName(name);
+                        if (err != null) throw new java.io.IOException(err);
+                        File f = new File(currentDir, name.trim());
+                        if (f.exists()) throw new java.io.IOException("\"" + name.trim() + "\" already exists");
+                        if (!f.createNewFile()) throw new java.io.IOException("Couldn't create the file");
+                        return f;
+                    });
+                }).show();
+    }
+
+    private void showRenameDialog(final File f) {
+        askName("Rename", "New name", f.getName(), name -> FileOps.rename(f, name));
+    }
+
+    private interface NameAction {
+        File run(String name) throws Exception;
+    }
+
+    private void askName(String title, String hint, String initial, final NameAction action) {
+        final EditText input = new EditText(requireContext());
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setText(initial);
+        int dot = initial.lastIndexOf('.');
+        input.setSelection(0, dot > 0 ? dot : initial.length());
+        FrameHolder holder = new FrameHolder(requireContext(), input);
+        final AlertDialog dlg = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(title)
+                .setView(holder)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("OK", null)
+                .create();
+        dlg.setOnShowListener(d -> {
+            input.requestFocus();
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(x -> {
+                try {
+                    action.run(input.getText().toString());
+                    dlg.dismiss();
+                    clearSelection();
+                    render();
+                } catch (Exception e) {
+                    input.setError(e.getMessage());
+                }
+            });
+        });
+        dlg.show();
+    }
+
+    /** Wraps a field in a frame with dialog-sized side padding. */
+    private static final class FrameHolder extends android.widget.FrameLayout {
+        FrameHolder(Context c, View child) {
+            super(c);
+            int p = (int) (24 * c.getResources().getDisplayMetrics().density);
+            setPadding(p, p / 3, p, 0);
+            addView(child, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        }
+    }
+
+    private void confirmDelete(final List<File> files) {
+        String what = files.size() == 1 ? "“" + files.get(0).getName() + "”" : Fmt.plural(files.size(), "item", "items");
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Delete " + what + "?")
+                .setMessage("This can't be undone.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (d, w) -> runJob("Deleting…", job -> {
+                    int failed = 0;
+                    for (File f : files) {
+                        if (job.cancel.get()) break;
+                        job.label = f.getName();
+                        if (!FileOps.delete(f)) failed++;
+                    }
+                    return failed == 0 ? "Deleted " + Fmt.plural(files.size(), "item", "items")
+                            : "Couldn't delete " + Fmt.plural(failed, "item", "items");
+                })).show();
+    }
+
+    private void showDetails(final List<File> files) {
+        final boolean single = files.size() == 1;
+        final StringBuilder base = new StringBuilder();
+        if (single) {
+            File f = files.get(0);
+            base.append("Name: ").append(f.getName()).append('\n');
+            base.append("Type: ").append(f.isDirectory() ? "Folder" : FileActions.mimeFor(f)).append('\n');
+            base.append("Location: ").append(f.getParent()).append('\n');
+            base.append("Modified: ").append(Fmt.dateTime(f.lastModified())).append('\n');
+        } else {
+            base.append(Fmt.plural(files.size(), "item", "items")).append(" selected\n");
+        }
+        final AlertDialog dlg = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Details")
+                .setMessage(base + "Size: calculating…")
+                .setPositiveButton("OK", null)
+                .show();
+        io.execute(() -> {
+            long total = 0;
+            for (File f : files) total += FileOps.sizeOf(f, null);
+            final String size = Fmt.bytes(total);
+            ui.post(() -> {
+                if (dlg.isShowing()) dlg.setMessage(base + "Size: " + size);
+            });
+        });
+    }
+
+    // ------------------------------------------------------------------ copy, move, extract (background jobs)
+
+    private void paste() {
+        final File dest = currentDir;
+        if (dest == null || clipboard.isEmpty()) return;
+        final List<File> files = new ArrayList<>(clipboard);
+        final boolean cut = clipboardCut;
+        runJob(cut ? "Moving…" : "Copying…", job -> {
+            long total = 0;
+            for (File f : files) total += FileOps.sizeOf(f, job.cancel);
+            job.total = total;
+            int done = 0;
+            StringBuilder errors = new StringBuilder();
+            for (File f : files) {
+                if (job.cancel.get()) break;
+                job.label = f.getName();
+                try {
+                    if (cut) FileOps.move(f, dest, job::addBytes, job.cancel);
+                    else FileOps.copy(f, dest, job::addBytes, job.cancel);
+                    done++;
+                } catch (Exception e) {
+                    if (errors.length() > 0) errors.append('\n');
+                    errors.append(e.getMessage());
+                }
+            }
+            if (cut && errors.length() == 0) {
+                ui.post(clipboard::clear);
+            }
+            String verb = cut ? "Moved " : "Copied ";
+            return errors.length() == 0 ? verb + Fmt.plural(done, "item", "items")
+                    : verb + done + " of " + files.size() + ". " + errors;
+        });
+    }
+
+    private void extract(final File zip) {
+        runJob("Extracting…", job -> {
+            job.label = zip.getName();
+            File out = FileOps.unzip(zip, job.cancel);
+            return "Extracted to “" + out.getName() + "”";
+        });
+    }
+
+    private static final class Job {
+        final AtomicBoolean cancel = new AtomicBoolean();
+        volatile long total;
+        volatile long done;
+        volatile String label = "";
+
+        void addBytes(long n) {
+            done += n;
+        }
+    }
+
+    private interface JobBody {
+        String run(Job job) throws Exception;
+    }
+
+    private void runJob(String title, final JobBody body) {
+        final Job job = new Job();
+        LinearLayout box = new LinearLayout(requireContext());
+        box.setOrientation(LinearLayout.VERTICAL);
+        int p = dp(24);
+        box.setPadding(p, dp(8), p, 0);
+        final TextView label = new TextView(requireContext());
+        label.setTextColor(ContextCompat.getColor(requireContext(), R.color.fs_muted));
+        label.setMaxLines(1);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        final LinearProgressIndicator bar = new LinearProgressIndicator(requireContext());
+        bar.setIndeterminate(true);
+        bar.setMax(1000);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = dp(12);
+        box.addView(label);
+        box.addView(bar, lp);
+
+        final AlertDialog dlg = new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(title)
+                .setView(box)
+                .setCancelable(false)
+                .setNegativeButton("Cancel", (d, w) -> job.cancel.set(true))
+                .show();
+
+        final Runnable[] ticker = new Runnable[1];
+        ticker[0] = () -> {
+            if (!dlg.isShowing()) return;
+            label.setText(job.label);
+            if (job.total > 0) {
+                bar.setIndeterminate(false);
+                bar.setProgress((int) Math.min(1000, job.done * 1000 / job.total));
+            }
+            ui.postDelayed(ticker[0], 150);
+        };
+        ui.post(ticker[0]);
+
+        try {
+            io.execute(() -> {
+                String msg;
+                try {
+                    msg = body.run(job);
+                } catch (Exception e) {
+                    msg = e.getMessage() == null ? "Something went wrong" : e.getMessage();
+                }
+                final String result = msg;
+                ui.post(() -> {
+                    if (dlg.isShowing()) dlg.dismiss();
+                    if (!isAdded() || getView() == null) return;
+                    selected.clear();
+                    Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show();
+                    render();
+                });
+            });
+        } catch (Exception e) {
+            dlg.dismiss();
+        }
+    }
+}
