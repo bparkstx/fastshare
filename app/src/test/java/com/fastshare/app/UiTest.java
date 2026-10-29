@@ -37,11 +37,14 @@ import org.robolectric.shadows.ShadowStatFs;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Drives the real activity and fragments on the JVM: screens inflate, buttons do what they say,
@@ -1769,6 +1772,425 @@ public class UiTest {
         assertEquals(0, hub.history().list().size());
         assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
         try { historyController.pause().stop().destroy(); } catch (Exception ignored) { }
+    }
+
+    // ------------------------------------------------------------------ network locations
+
+    /** A small in-memory server so the screens can be driven without a network. */
+    static final class FakeRemote implements Remote {
+        final java.util.TreeMap<String, byte[]> files = new java.util.TreeMap<>();
+        final java.util.TreeSet<String> dirs = new java.util.TreeSet<>();
+        volatile boolean closed;
+        volatile int failNextLists;
+
+        FakeRemote() {
+            dirs.add("/");
+        }
+
+        @Override public synchronized List<Item> list(String path) throws IOException {
+            if (failNextLists > 0) {
+                failNextLists--;
+                throw new IOException("Connection reset");
+            }
+            String dir = Paths.clean(path);
+            if (!dirs.contains(dir)) throw new IOException("That doesn't exist on the server.");
+            List<Item> out = new ArrayList<>();
+            for (String d : dirs) {
+                if (!d.equals("/") && Paths.parent(d).equals(dir)) out.add(new Item(Paths.name(d), d, true, -1, 1_760_000_000_000L));
+            }
+            for (java.util.Map.Entry<String, byte[]> f : files.entrySet()) {
+                if (Paths.parent(f.getKey()).equals(dir)) out.add(new Item(Paths.name(f.getKey()), f.getKey(), false, f.getValue().length, 1_760_000_000_000L));
+            }
+            java.util.Collections.sort(out, ORDER);
+            return out;
+        }
+
+        @Override public synchronized InputStream open(String path, long offset) throws IOException {
+            byte[] b = files.get(Paths.clean(path));
+            if (b == null) throw new IOException("That doesn't exist on the server.");
+            return new java.io.ByteArrayInputStream(b, (int) offset, b.length - (int) offset);
+        }
+
+        @Override public synchronized void put(String path, InputStream in, long size) throws IOException {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            files.put(Paths.clean(path), bos.toByteArray());
+        }
+
+        @Override public synchronized void mkdir(String path) throws IOException {
+            String p = Paths.clean(path);
+            if (dirs.contains(p) || files.containsKey(p)) throw new IOException("Something with that name is already there.");
+            dirs.add(p);
+        }
+
+        @Override public synchronized void delete(String path, boolean dir) {
+            String p = Paths.clean(path);
+            files.remove(p);
+            if (dir) {
+                dirs.remove(p);
+                files.keySet().removeIf(k -> k.startsWith(p + "/"));
+                dirs.removeIf(k -> k.startsWith(p + "/"));
+            }
+        }
+
+        @Override public synchronized void rename(String from, String to) throws IOException {
+            String a = Paths.clean(from);
+            String b = Paths.clean(to);
+            if (files.containsKey(b) || dirs.contains(b)) throw new IOException("Something with that name is already there.");
+            if (files.containsKey(a)) {
+                files.put(b, files.remove(a));
+            } else if (dirs.remove(a)) {
+                dirs.add(b);
+            }
+        }
+
+        @Override public void close() { closed = true; }
+    }
+
+    private static android.widget.EditText dialogInput(androidx.appcompat.app.AlertDialog d) {
+        android.widget.FrameLayout custom = d.findViewById(androidx.appcompat.R.id.custom);
+        return (android.widget.EditText) ((android.widget.FrameLayout) custom.getChildAt(0)).getChildAt(0);
+    }
+
+    private FakeRemote fake;
+    private ActivityController<NetworkActivity> networkController;
+    private ActivityController<RemoteActivity> remoteController;
+
+    private void installFakeServer() {
+        fake = new FakeRemote();
+        fake.dirs.add("/Photos");
+        fake.dirs.add("/Photos/2026");
+        fake.dirs.add("/Docs");
+        fake.files.put("/readme.txt", "hello from the server".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        fake.files.put("/Photos/beach.jpg", new byte[2_345_678]);
+        fake.files.put("/Photos/2026/new.jpg", new byte[1234]);
+        fake.files.put("/Docs/report.pdf", new byte[88_000]);
+        RemoteSession.reset();
+        Remotes.testOpener = c -> {
+            if (c.host.equals("down.local")) throw new IOException(Remotes.friendly(new java.net.ConnectException("refused"), c));
+            return fake;
+        };
+    }
+
+    private Connection saveConnection(String name, String host, Connection.Type type) throws Exception {
+        Connection c = new Connection();
+        c.name = name;
+        c.host = host;
+        c.type = type;
+        c.user = "bob";
+        c.password = "pw";
+        if (type == Connection.Type.SMB) c.path = "share";
+        return RemoteSession.store(RuntimeEnvironment.getApplication()).save(c);
+    }
+
+    private RemoteActivity openRemote(Connection c) {
+        remoteController = Robolectric.buildActivity(RemoteActivity.class,
+                new android.content.Intent(RuntimeEnvironment.getApplication(), RemoteActivity.class).putExtra(RemoteActivity.EXTRA_ID, c.id)).setup();
+        RemoteActivity a = remoteController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        return a;
+    }
+
+    private static java.util.List<String> remoteRows(android.app.Activity a) {
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        java.util.List<String> out = new ArrayList<>();
+        for (RowAdapter.Row r : ra.rows()) out.add(r.title);
+        return out;
+    }
+
+    private static void layoutOf(android.app.Activity a) {
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+    }
+
+    private static void tapRow(android.app.Activity a, int position, boolean longPress) {
+        layoutOf(a);
+        View v = ((RecyclerView) a.findViewById(R.id.list)).findViewHolderForAdapterPosition(position).itemView;
+        if (longPress) v.performLongClick(); else v.performClick();
+        settle();
+    }
+
+    @After
+    public void tearDownNetwork() {
+        Remotes.testOpener = null;
+        RemoteSession.pendingUploads.clear();
+        RemoteSession.reset();
+        for (ActivityController<?> c : new ActivityController<?>[]{networkController, remoteController}) {
+            if (c != null) {
+                try { c.pause().stop().destroy(); } catch (Exception ignored) { }
+            }
+        }
+        networkController = null;
+        remoteController = null;
+    }
+
+    @Test public void networkTileOnHomeOpensTheLocationsList() throws Exception {
+        launch();
+        android.view.ViewGroup row = (android.view.ViewGroup) ((android.widget.LinearLayout) files().getView().findViewById(R.id.toolsGrid)).getChildAt(0);
+        assertEquals("Network", ((TextView) row.getChildAt(3).findViewById(R.id.tileLabel)).getText().toString());
+        row.getChildAt(3).performClick();
+        assertEquals(NetworkActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    @Test public void emptyLocationsListInvitesYouToAddOne() throws Exception {
+        installFakeServer();
+        networkController = Robolectric.buildActivity(NetworkActivity.class).setup();
+        NetworkActivity a = networkController.get();
+        settle();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+        assertTrue(((TextView) a.findViewById(R.id.emptyText)).getText().toString().contains("Tap + to add"));
+        shotOf(a, "100_network_empty");
+    }
+
+    private static void shotDialog(androidx.appcompat.app.AlertDialog d, String name) throws Exception {
+        View decor = d.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int h = Math.max(decor.getMeasuredHeight(), 400);
+        decor.layout(0, 0, W, h);
+        Bitmap b = Bitmap.createBitmap(W, h, Bitmap.Config.ARGB_8888);
+        b.eraseColor(0xFFFFFFFF);
+        decor.draw(new Canvas(b));
+        save(b, name);
+    }
+
+    @Test public void addingALocationChecksTestsAndSavesIt() throws Exception {
+        installFakeServer();
+        networkController = Robolectric.buildActivity(NetworkActivity.class).setup();
+        NetworkActivity a = networkController.get();
+        settle();
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(R.id.action_add, 0);
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        android.widget.Spinner type = d.findViewById(R.id.cType);
+        assertEquals(6, type.getAdapter().getCount());
+        // choose SFTP: the private key box appears, the certificate box does not
+        type.setSelection(Connection.Type.SFTP.ordinal());
+        settle();
+        assertEquals(View.VISIBLE, d.findViewById(R.id.cKey).getVisibility());
+        assertEquals(View.GONE, d.findViewById(R.id.cTrust).getVisibility());
+        type.setSelection(Connection.Type.WEBDAVS.ordinal());
+        settle();
+        assertEquals(View.GONE, d.findViewById(R.id.cKey).getVisibility());
+        assertEquals(View.VISIBLE, d.findViewById(R.id.cTrust).getVisibility());
+        type.setSelection(Connection.Type.SFTP.ordinal());
+        settle();
+
+        // saving with nothing filled in explains what is missing
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        TextView status = d.findViewById(R.id.cStatus);
+        assertTrue(status.getText().toString(), status.getText().toString().contains("address"));
+        shotDialog(d, "101_network_add_error");
+
+        ((android.widget.EditText) d.findViewById(R.id.cName)).setText("Home NAS");
+        ((android.widget.EditText) d.findViewById(R.id.cHost)).setText("192.168.1.20");
+        ((android.widget.EditText) d.findViewById(R.id.cUser)).setText("bob");
+        ((android.widget.EditText) d.findViewById(R.id.cPassword)).setText("hunter2");
+        d.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+        waitUntil(() -> status.getText().toString().startsWith("Connected"));
+        assertTrue(status.getText().toString(), status.getText().toString().startsWith("Connected. 3 items"));
+        shotDialog(d, "102_network_add_tested");
+
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        java.util.List<Connection> saved = RemoteSession.store(a).list();
+        assertEquals(1, saved.size());
+        assertEquals("Home NAS", saved.get(0).name);
+        assertEquals("hunter2", saved.get(0).password);
+        assertEquals(Connection.Type.SFTP, saved.get(0).type);
+        assertEquals(java.util.Arrays.asList("Home NAS"), remoteRows(a));
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.startsWith("SFTP (SSH)  ·  sftp://bob@192.168.1.20"));
+        shotOf(a, "103_network_list");
+
+        // tapping it opens the browser
+        tapRow(a, 0, false);
+        android.content.Intent next = shadowOf(a).getNextStartedActivity();
+        assertEquals(RemoteActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(saved.get(0).id, next.getStringExtra(RemoteActivity.EXTRA_ID));
+    }
+
+    @Test public void locationsCanBeEditedAndRemoved() throws Exception {
+        installFakeServer();
+        Connection c = saveConnection("Office", "10.0.0.5", Connection.Type.FTP);
+        networkController = Robolectric.buildActivity(NetworkActivity.class).setup();
+        NetworkActivity a = networkController.get();
+        settle();
+        a.edit(RemoteSession.store(a).get(c.id));
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertEquals("Office", ((android.widget.EditText) d.findViewById(R.id.cName)).getText().toString());
+        assertEquals("10.0.0.5", ((android.widget.EditText) d.findViewById(R.id.cHost)).getText().toString());
+        assertEquals("pw", ((android.widget.EditText) d.findViewById(R.id.cPassword)).getText().toString());
+        ((android.widget.EditText) d.findViewById(R.id.cName)).setText("Office server");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertEquals("Office server", RemoteSession.store(a).get(c.id).name);
+        assertEquals("same entry, not a copy", 1, RemoteSession.store(a).list().size());
+
+        tapRow(a, 0, true);                              // long press -> menu: Edit / Remove
+        a.onLongClick(((RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter()).rows().get(0));
+    }
+
+    @Test public void browsingFoldersAndGoingBack() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Home NAS", "nas.local", Connection.Type.SFTP));
+        assertEquals(java.util.Arrays.asList("Docs", "Photos", "readme.txt"), remoteRows(a));
+        assertEquals("Home NAS", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getTitle().toString());
+        assertTrue(((TextView) a.findViewById(R.id.info)).getText().toString().contains("3 items"));
+        shotOf(a, "104_remote_root");
+
+        tapRow(a, 1, false);                             // Photos
+        waitUntil(() -> remoteRows(a).contains("beach.jpg"));
+        settle();
+        assertEquals(java.util.Arrays.asList("2026", "beach.jpg"), remoteRows(a));
+        assertEquals("/Photos", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getSubtitle().toString());
+        tapRow(a, 0, false);                             // 2026
+        waitUntil(() -> remoteRows(a).contains("new.jpg"));
+        settle();
+        assertEquals("/Photos/2026", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getSubtitle().toString());
+        shotOf(a, "105_remote_subfolder");
+
+        a.getOnBackPressedDispatcher().onBackPressed();
+        waitUntil(() -> remoteRows(a).contains("beach.jpg"));
+        settle();
+        assertEquals("/Photos", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getSubtitle().toString());
+        a.getOnBackPressedDispatcher().onBackPressed();
+        waitUntil(() -> remoteRows(a).contains("readme.txt"));
+        settle();
+        assertEquals(java.util.Arrays.asList("Docs", "Photos", "readme.txt"), remoteRows(a));
+        assertFalse(a.isFinishing());
+        a.getOnBackPressedDispatcher().onBackPressed();
+        assertTrue("back at the top leaves the screen", a.isFinishing());
+    }
+
+    @Test public void downloadingSavesIntoDownloadsFolderedByLocationName() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Home NAS", "nas.local", Connection.Type.SMB));
+        tapRow(a, 1, true);                              // select Photos (a folder)
+        tapRow(a, 2, false);                             // add readme.txt
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        assertEquals("2", tb.getTitle().toString());
+        shotOf(a, "106_remote_selected");
+        tb.getMenu().performIdentifierAction(R.id.action_download, 0);
+        File dest = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileBandit/Home NAS");
+        waitUntil(() -> new File(dest, "readme.txt").exists() && new File(dest, "Photos/2026/new.jpg").exists());
+        settle();
+        assertEquals("hello from the server", new String(Files.readAllBytes(new File(dest, "readme.txt").toPath()), StandardCharsets.UTF_8));
+        assertEquals(2_345_678, new File(dest, "Photos/beach.jpg").length());
+        assertEquals(1234, new File(dest, "Photos/2026/new.jpg").length());
+        View snack = a.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_text);
+        assertNotNull(snack);
+        assertTrue(((TextView) snack).getText().toString(), ((TextView) snack).getText().toString().startsWith("Saved 2 items in Downloads/FileBandit/Home NAS"));
+    }
+
+    @Test public void openingAFileDownloadsItAndShowsIt() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Home NAS", "nas.local", Connection.Type.WEBDAV));
+        tapRow(a, 2, false);                             // readme.txt
+        waitUntil(() -> shadowOf(a).peekNextStartedActivity() != null);
+        android.content.Intent next = shadowOf(a).getNextStartedActivity();
+        assertNotNull("the viewer should start", next);
+        assertEquals(ViewerActivity.class.getName(), next.getComponent().getClassName());
+        File shown = new File(next.getStringExtra(ViewerActivity.EXTRA_PATH));
+        assertEquals("readme.txt", shown.getName());
+        assertEquals("hello from the server", new String(Files.readAllBytes(shown.toPath()), StandardCharsets.UTF_8));
+    }
+
+    @Test public void uploadingFilesFromTheFilesTabLandsInTheFolderYouChose() throws Exception {
+        installFakeServer();
+        Connection c = saveConnection("Home NAS", "nas.local", Connection.Type.FTP);
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_upload_network);
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        d.getListView().performItemClick(null, 0, 0);
+        settle();
+        android.content.Intent next = shadowOf(activity).getNextStartedActivity();
+        assertEquals(RemoteActivity.class.getName(), next.getComponent().getClassName());
+        assertEquals(1, RemoteSession.pendingUploads.size());
+
+        RemoteActivity a = openRemote(c);
+        assertEquals(View.VISIBLE, a.findViewById(R.id.bottomBar).getVisibility());
+        assertEquals("1 item ready to upload", ((TextView) a.findViewById(R.id.bottomText)).getText().toString());
+        tapRow(a, 0, false);                             // into Docs
+        waitUntil(() -> remoteRows(a).contains("report.pdf"));
+        settle();
+        shotOf(a, "107_remote_upload_bar");
+        a.findViewById(R.id.bottomButton).performClick();
+        waitUntil(() -> fake.files.containsKey("/Docs/notes.txt"));
+        settle();
+        assertEquals(1_200, fake.files.get("/Docs/notes.txt").length);
+        assertTrue(RemoteSession.pendingUploads.isEmpty());
+        assertTrue("the original is still on the phone", new File(storage, "Download/notes.txt").exists());
+        assertTrue(remoteRows(a).toString(), remoteRows(a).contains("notes.txt"));
+    }
+
+    @Test public void deleteRenameAndNewFolderWork() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Home NAS", "nas.local", Connection.Type.SFTP));
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+
+        tb.getMenu().performIdentifierAction(R.id.action_new_folder, 0);
+        settle();
+        androidx.appcompat.app.AlertDialog nd = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        dialogInput(nd).setText("Backups");
+        nd.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> fake.dirs.contains("/Backups"));
+        settle();
+        assertTrue(remoteRows(a).toString(), remoteRows(a).contains("Backups"));
+
+        tapRow(a, remoteRows(a).indexOf("readme.txt"), true);
+        tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_rename, 0);
+        settle();
+        androidx.appcompat.app.AlertDialog rd = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        dialogInput(rd).setText("README.md");
+        rd.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> fake.files.containsKey("/README.md"));
+        settle();
+        assertFalse(fake.files.containsKey("/readme.txt"));
+        assertTrue(remoteRows(a).toString(), remoteRows(a).contains("README.md"));
+
+        tapRow(a, remoteRows(a).indexOf("Photos"), true);
+        tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_delete, 0);
+        settle();
+        androidx.appcompat.app.AlertDialog dd = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        shotDialog(dd, "108_remote_delete_confirm");
+        dd.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> !fake.dirs.contains("/Photos"));
+        settle();
+        assertFalse(fake.files.containsKey("/Photos/beach.jpg"));
+        assertFalse(fake.files.containsKey("/Photos/2026/new.jpg"));
+        assertFalse(remoteRows(a).contains("Photos"));
+    }
+
+    @Test public void aServerThatCantBeReachedExplainsWhy() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Down", "down.local", Connection.Type.SFTP));
+        assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+        String msg = ((TextView) a.findViewById(R.id.emptyText)).getText().toString();
+        assertTrue(msg, msg.startsWith("Can't reach down.local on port 22"));
+        assertTrue(msg, msg.contains("Refresh"));
+        shotOf(a, "109_remote_unreachable");
+    }
+
+    @Test public void aDroppedConnectionIsReestablishedWhenOpeningAFolder() throws Exception {
+        installFakeServer();
+        RemoteActivity a = openRemote(saveConnection("Home NAS", "nas.local", Connection.Type.SFTP));
+        fake.failNextLists = 1;                          // the first try fails, the retry reconnects
+        tapRow(a, 1, false);
+        waitUntil(() -> remoteRows(a).contains("beach.jpg"));
+        settle();
+        assertEquals(java.util.Arrays.asList("2026", "beach.jpg"), remoteRows(a));
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {

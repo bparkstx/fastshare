@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="24dp">
+
+        <Spinner
+            android:id="@+id/cType"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <TextView
+            android:id="@+id/cTypeHelp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/fs_muted"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/cName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Name (for example Home NAS)"
+            android:importantForAutofill="no"
+            android:inputType="textCapWords"
+            android:singleLine="true" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/cHost"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Address (192.168.1.20 or nas.local)"
+                android:importantForAutofill="no"
+                android:inputType="textUri"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/cPort"
+                android:layout_width="88dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:hint="Port"
+                android:importantForAutofill="no"
+                android:inputType="number"
+                android:maxLength="5"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/cUser"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="User name (leave empty for guest)"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:singleLine="true" />
+
+        <EditText
+            android:id="@+id/cPassword"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Password"
+            android:importantForAutofill="no"
+            android:inputType="textPassword"
+            android:singleLine="true" />
+
+        <EditText
+            android:id="@+id/cPath"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Folder to start in"
+            android:importantForAutofill="no"
+            android:inputType="textUri"
+            android:singleLine="true" />
+
+        <EditText
+            android:id="@+id/cKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Private key (optional, paste it here)"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:maxLines="4"
+            android:minLines="2" />
+
+        <CheckBox
+            android:id="@+id/cTrust"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Trust this server's certificate (for your own server with a self-made certificate)"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/cStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:textSize="14sp" />
+    </LinearLayout>
+</ScrollView>

@@ -11,6 +11,7 @@
     <item android:id="@+id/action_select_type" android:title="Select by type..." app:showAsAction="never"/>
     <item android:id="@+id/action_share" android:title="Share with other apps" app:showAsAction="never"/>
     <item android:id="@+id/action_favorite" android:title="Add to favorites" app:showAsAction="never"/>
+    <item android:id="@+id/action_upload_network" android:title="Upload to network location..." app:showAsAction="never"/>
     <item android:id="@+id/action_vault" android:title="Move to private vault..." app:showAsAction="never"/>
     <item android:id="@+id/action_compress" android:title="Compress to zip" app:showAsAction="never"/>
     <item android:id="@+id/action_rename" android:title="Rename..." app:showAsAction="never"/>

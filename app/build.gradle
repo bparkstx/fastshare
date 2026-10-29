@@ -41,6 +41,8 @@ android {
             includeAndroidResources = true
             all {
                 maxHeapSize = '3g'
+                // file names with accents need a UTF-8 locale even where the machine has none set
+                environment 'LC_ALL', 'C.UTF-8'
                 // Robolectric keeps a lot of resources alive across the many UI tests
                 forkEvery = 0
                 // Optional: point at a folder holding the Robolectric android-all jar to run offline.
@@ -71,8 +73,14 @@ dependencies {
     implementation 'org.tukaani:xz:1.9'
     implementation 'com.github.junrar:junrar:7.5.5'                // rar
     implementation 'org.slf4j:slf4j-nop:1.7.36'
+    implementation 'commons-net:commons-net:3.11.1'                // ftp, ftps
+    implementation 'com.github.mwiede:jsch:0.2.20'                 // sftp
+    implementation 'com.hierynomus:smbj:0.13.0'                    // smb2/3 (windows shares, nas)
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'            // webdav
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.robolectric:robolectric:4.13'
     testImplementation 'androidx.test:core:1.6.1'
+    testImplementation 'org.apache.ftpserver:ftpserver-core:1.2.0'
 }

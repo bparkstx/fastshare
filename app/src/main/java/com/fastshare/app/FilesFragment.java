@@ -523,6 +523,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                 (Runnable) () -> startActivity(new Intent(requireContext(), VaultActivity.class))});
         toolTiles.add(new Object[]{"Apps", R.drawable.ic_apk, ContextCompat.getColor(requireContext(), R.color.kind_apk),
                 (Runnable) () -> startActivity(new Intent(requireContext(), AppsActivity.class))});
+        toolTiles.add(new Object[]{"Network", R.drawable.ic_cloud, ContextCompat.getColor(requireContext(), R.color.kind_document),
+                (Runnable) () -> startActivity(new Intent(requireContext(), NetworkActivity.class))});
         fillGrid(tools, toolTiles, 4);
 
         LinearLayout vols = v.findViewById(R.id.volumes);
@@ -773,6 +775,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         } else if (id == R.id.action_pin_folder) {
             toggleFavorites(java.util.Collections.singletonList(currentDir));
             updateToolbar();
+        } else if (id == R.id.action_upload_network) {
+            chooseNetworkLocation(selectedFiles());
         } else if (id == R.id.action_vault) {
             confirmMoveToVault(selectedFiles());
         } else if (id == R.id.action_compress) {
@@ -878,6 +882,29 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             pendingUndoMessage = "Renamed to " + renamed.getName();
             return renamed;
         });
+    }
+
+    /** Picks which saved server to send the selection to; the upload itself happens in the server's own screen. */
+    private void chooseNetworkLocation(final List<File> files) {
+        final List<Connection> saved = RemoteSession.store(requireContext()).list();
+        if (saved.isEmpty()) {
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("No network locations yet")
+                    .setMessage("Add a computer, NAS or server first, then send files to it from here.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Add one", (d, w) -> startActivity(new Intent(requireContext(), NetworkActivity.class))).show();
+            return;
+        }
+        String[] names = new String[saved.size()];
+        for (int i = 0; i < names.length; i++) names[i] = saved.get(i).name.isEmpty() ? saved.get(i).host : saved.get(i).name;
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Upload " + Fmt.plural(files.size(), "item", "items") + " to…")
+                .setItems(names, (d, which) -> {
+                    RemoteSession.pendingUploads.clear();
+                    RemoteSession.pendingUploads.addAll(files);
+                    clearSelection();
+                    startActivity(new Intent(requireContext(), RemoteActivity.class).putExtra(RemoteActivity.EXTRA_ID, saved.get(which).id));
+                }).show();
     }
 
     private void confirmMoveToVault(final List<File> files) {
