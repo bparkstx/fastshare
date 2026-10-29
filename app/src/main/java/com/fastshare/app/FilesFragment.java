@@ -4,12 +4,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.StatFs;
-import android.os.storage.StorageManager;
-import android.os.storage.StorageVolume;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -173,44 +170,19 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     // ------------------------------------------------------------------ storage helpers
 
     private static File primaryRoot() {
-        return Environment.getExternalStorageDirectory();
+        return Volumes.primary();
     }
 
     private List<File> roots() {
-        List<File> out = new ArrayList<>();
-        out.add(primaryRoot());
-        try {
-            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
-            for (StorageVolume sv : sm.getStorageVolumes()) {
-                File d = sv.getDirectory();
-                if (d != null && !sv.isPrimary() && Environment.MEDIA_MOUNTED.equals(sv.getState())) out.add(d);
-            }
-        } catch (Exception ignored) { }
-        return out;
+        return Volumes.roots(requireContext());
     }
 
     private File rootOf(File f) {
-        File best = primaryRoot();
-        int bestLen = -1;
-        for (File r : roots()) {
-            String rp = r.getPath();
-            if ((f.getPath().equals(rp) || f.getPath().startsWith(rp + "/")) && rp.length() > bestLen) {
-                best = r;
-                bestLen = rp.length();
-            }
-        }
-        return best;
+        return Volumes.rootOf(roots(), f);
     }
 
     private String rootLabel(File root) {
-        if (root.equals(primaryRoot())) return "Internal storage";
-        try {
-            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
-            for (StorageVolume sv : sm.getStorageVolumes()) {
-                if (root.equals(sv.getDirectory())) return sv.getDescription(requireContext());
-            }
-        } catch (Exception ignored) { }
-        return root.getName();
+        return Volumes.label(requireContext(), root);
     }
 
     private static boolean hasAccess() {
@@ -489,6 +461,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         for (final MediaQuery.Category c : MediaQuery.Category.values()) {
             catTiles.add(new Object[]{c.title, c.icon, Kinds.color(requireContext(), c.kind), (Runnable) () -> openCategory(c)});
         }
+        catTiles.add(new Object[]{"Trash", R.drawable.ic_delete, ContextCompat.getColor(requireContext(), R.color.kind_other),
+                (Runnable) () -> startActivity(new Intent(requireContext(), TrashActivity.class))});
         fillGrid(cats, catTiles, 3);
 
         LinearLayout vols = v.findViewById(R.id.volumes);
@@ -619,6 +593,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             clearSelection();
             updatePasteBar();
         } else if (id == R.id.action_delete) {
+            trashFiles(selectedFiles());
+        } else if (id == R.id.action_delete_forever) {
             confirmDelete(selectedFiles());
         } else if (id == R.id.action_select_all) {
             for (FileOps.Item it : adapter.items()) selected.add(it.file.getPath());
@@ -718,8 +694,20 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     }
 
     private void showRenameDialog(final File f) {
-        askName("Rename", "New name", f.getName(), name -> FileOps.rename(f, name));
+        askName("Rename", "New name", f.getName(), name -> {
+            final File renamed = FileOps.rename(f, name);
+            final String oldName = f.getName();
+            pendingUndo = () -> {
+                FileOps.rename(renamed, oldName);
+                return "Renamed back to " + oldName;
+            };
+            pendingUndoMessage = "Renamed to " + renamed.getName();
+            return renamed;
+        });
     }
+
+    private Undo pendingUndo;
+    private String pendingUndoMessage;
 
     private interface NameAction {
         File run(String name) throws Exception;
@@ -747,6 +735,10 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                     dlg.dismiss();
                     clearSelection();
                     render();
+                    if (pendingUndo != null) {
+                        showUndo(pendingUndoMessage, pendingUndo);
+                        pendingUndo = null;
+                    }
                 } catch (Exception e) {
                     input.setError(e.getMessage());
                 }
@@ -765,11 +757,44 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         }
     }
 
+    /** Moves files to the recycle bin; "Undo" puts them straight back. */
+    private void trashFiles(final List<File> files) {
+        final List<File> roots = roots();
+        runJob("Moving to trash\u2026", job -> {
+            final List<Trash> owners = new ArrayList<>();
+            final List<Trash.Entry> entries = new ArrayList<>();
+            String error = null;
+            for (File f : files) {
+                if (job.cancel.get()) break;
+                job.label = f.getName();
+                try {
+                    Trash t = new Trash(Volumes.rootOf(roots, f));
+                    entries.add(t.trash(f));
+                    owners.add(t);
+                } catch (Exception e) {
+                    error = e.getMessage();
+                }
+            }
+            if (!entries.isEmpty()) {
+                job.undo = () -> {
+                    int n = 0;
+                    for (int i = 0; i < entries.size(); i++) {
+                        owners.get(i).restore(entries.get(i));
+                        n++;
+                    }
+                    return "Restored " + Fmt.plural(n, "item", "items");
+                };
+            }
+            String msg = entries.isEmpty() ? "Nothing was deleted" : "Moved " + Fmt.plural(entries.size(), "item", "items") + " to trash";
+            return error == null ? msg : msg + ". " + error;
+        });
+    }
+
     private void confirmDelete(final List<File> files) {
         String what = files.size() == 1 ? "“" + files.get(0).getName() + "”" : Fmt.plural(files.size(), "item", "items");
         new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Delete " + what + "?")
-                .setMessage("This can't be undone.")
+                .setTitle("Delete " + what + " permanently?")
+                .setMessage("It will not go to the trash. This can't be undone.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Delete", (d, w) -> runJob("Deleting…", job -> {
                     int failed = 0;
@@ -823,12 +848,16 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             job.total = total;
             int done = 0;
             StringBuilder errors = new StringBuilder();
+            final List<File> results = new ArrayList<>();
+            final List<File> origins = new ArrayList<>();
             for (File f : files) {
                 if (job.cancel.get()) break;
                 job.label = f.getName();
                 try {
-                    if (cut) FileOps.move(f, dest, job::addBytes, job.cancel);
-                    else FileOps.copy(f, dest, job::addBytes, job.cancel);
+                    File made = cut ? FileOps.move(f, dest, job::addBytes, job.cancel)
+                            : FileOps.copy(f, dest, job::addBytes, job.cancel);
+                    results.add(made);
+                    origins.add(f);
                     done++;
                 } catch (Exception e) {
                     if (errors.length() > 0) errors.append('\n');
@@ -837,6 +866,15 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             }
             if (cut && errors.length() == 0) {
                 ui.post(clipboard::clear);
+            }
+            if (!results.isEmpty()) {
+                job.undo = () -> {
+                    for (int i = 0; i < results.size(); i++) {
+                        if (cut) FileOps.move(results.get(i), origins.get(i).getParentFile(), null, null);
+                        else FileOps.delete(results.get(i));
+                    }
+                    return cut ? "Moved back" : "Copy removed";
+                };
             }
             String verb = cut ? "Moved " : "Copied ";
             return errors.length() == 0 ? verb + Fmt.plural(done, "item", "items")
@@ -852,11 +890,20 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         });
     }
 
+    /** A snackbar with an Undo button that stays long enough to be tapped. */
+    private void showUndo(String message, final Undo undo) {
+        if (!isAdded() || getView() == null) return;
+        Snackbar.make(requireView(), message, 8000)
+                .setAction("Undo", v -> runJob("Undoing\u2026", job -> undo.run()))
+                .show();
+    }
+
     private static final class Job {
         final AtomicBoolean cancel = new AtomicBoolean();
         volatile long total;
         volatile long done;
         volatile String label = "";
+        volatile Undo undo;
 
         void addBytes(long n) {
             done += n;
@@ -917,7 +964,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                     if (dlg.isShowing()) dlg.dismiss();
                     if (!isAdded() || getView() == null) return;
                     selected.clear();
-                    Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show();
+                    if (job.undo != null) showUndo(result, job.undo);
+                    else Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show();
                     render();
                 });
             });

@@ -37,6 +37,19 @@ public final class Fmt {
         return DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(new Date(millis));
     }
 
+    /** "just now", "5 min ago", "3 h ago", "2 days ago", or the date for older things. */
+    public static String ago(long then, long now) {
+        long d = Math.max(0, now - then);
+        long min = d / 60_000;
+        if (min < 1) return "just now";
+        if (min < 60) return min + " min ago";
+        long h = min / 60;
+        if (h < 24) return h + " h ago";
+        long days = h / 24;
+        if (days < 14) return days + (days == 1 ? " day ago" : " days ago");
+        return date(then);
+    }
+
     public static String plural(int n, String one, String many) {
         return n + " " + (n == 1 ? one : many);
     }

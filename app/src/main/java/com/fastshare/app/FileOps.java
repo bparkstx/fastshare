@@ -204,7 +204,7 @@ public final class FileOps {
                     out.add(Item.of(f));
                     if (out.size() >= limit) break;
                 }
-                if (isDir && !isSymlink(f)) queue.add(f);
+                if (isDir && !isSymlink(f) && !Trash.DIR_NAME.equals(f.getName())) queue.add(f);
             }
         }
         return out;

@@ -126,6 +126,14 @@ public class UiTest {
         return (TransferFragment) activity.getSupportFragmentManager().findFragmentByTag("transfer");
     }
 
+    /** Runs the UI clock in small steps until the condition holds (or gives up after a few seconds). */
+    private static void waitUntil(java.util.function.BooleanSupplier cond) {
+        for (int i = 0; i < 100 && !cond.getAsBoolean(); i++) {
+            try { Thread.sleep(25); } catch (InterruptedException ignored) { }
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(60));
+        }
+    }
+
     /** Waits for background work, then lets posted UI work run. */
     private static void settle() {
         for (int i = 0; i < 10; i++) {
@@ -143,10 +151,17 @@ public class UiTest {
     }
 
     private void shot(String name) throws Exception {
-        layout();
+        shotOf(activity, name);
+    }
+
+    private static void shotOf(android.app.Activity a, String name) throws Exception {
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
         Bitmap b = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
         b.eraseColor(0xFFFFFFFF);
-        activity.getWindow().getDecorView().draw(new Canvas(b));
+        decor.draw(new Canvas(b));
         save(b, name);
     }
 
@@ -241,7 +256,7 @@ public class UiTest {
         android.widget.LinearLayout quick = v.findViewById(R.id.quickGrid);
         assertTrue("quick access tiles", quick.getChildCount() >= 2);
         android.widget.LinearLayout cats = v.findViewById(R.id.catGrid);
-        assertEquals(2, cats.getChildCount());   // 6 categories, 3 per row
+        assertEquals(3, cats.getChildCount());   // 6 categories + Trash, 3 per row
         shot("01_files_home");
     }
 
@@ -355,17 +370,119 @@ public class UiTest {
         assertEquals(View.GONE, files().getView().findViewById(R.id.pasteBar).getVisibility());
     }
 
-    @Test public void deleteAsksFirstThenRemoves() throws Exception {
+    /** Waits (in small steps, so the snackbar doesn't time out on the test clock) for its Undo button, then taps it. */
+    private void clickSnackbarAction() {
+        View action = null;
+        for (int i = 0; i < 80 && action == null; i++) {
+            try { Thread.sleep(25); } catch (InterruptedException ignored) { }
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(60));
+            action = activity.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_action);
+        }
+        assertNotNull("an Undo button should be showing", action);
+        action.performClick();
+        for (int i = 0; i < 4; i++) settle();
+        layout();
+    }
+
+    @Test public void deleteMovesToTrashAndUndoBringsItBack() throws Exception {
         launch();
         files().openDir(new File(storage, "Download"));
         settle();
         longClickRow("notes.txt");
         menu(R.id.action_delete);
-        shot("06_delete_confirm");
+        waitUntil(() -> !new File(storage, "Download/notes.txt").exists());
+        assertFalse("gone from the folder", new File(storage, "Download/notes.txt").exists());
+        assertEquals("sits in the recycle bin", 1, new Trash(storage).list().size());
+        clickSnackbarAction();
+        assertTrue("undo puts it back", new File(storage, "Download/notes.txt").exists());
+        assertTrue(new Trash(storage).list().isEmpty());
+    }
+
+    @Test public void permanentDeleteAsksFirstAndSkipsTheTrash() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_delete_forever);
+        shot("06b_delete_permanently_confirm");
         assertTrue("nothing is deleted before confirming", new File(storage, "Download/notes.txt").exists());
         pressDialogButton(AlertDialog.BUTTON_POSITIVE);
         for (int i = 0; i < 5; i++) settle();
         assertFalse(new File(storage, "Download/notes.txt").exists());
+        assertTrue("not in the trash either", new Trash(storage).list().isEmpty());
+    }
+
+    @Test public void trashScreenListsRestoresAndEmpties() throws Exception {
+        new Trash(storage).trash(new File(storage, "Download/notes.txt"));
+        new Trash(storage).trash(new File(storage, "Download/Invoice March.pdf"));
+        new Trash(storage).trash(new File(storage, "Download/Old stuff"));
+        ActivityController<TrashActivity> c = Robolectric.buildActivity(TrashActivity.class).setup();
+        TrashActivity t = c.get();
+        settle();
+        RecyclerView list = t.findViewById(R.id.list);
+        RowAdapter ra = (RowAdapter) list.getAdapter();
+        assertEquals(3, ra.rows().size());
+        assertEquals(View.GONE, t.findViewById(R.id.empty).getVisibility());
+        shotOf(t, "30_trash");
+
+        // select one and restore it
+        View decor = t.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        list.findViewHolderForAdapterPosition(0).itemView.performLongClick();
+        settle();
+        MaterialToolbar tb = t.findViewById(R.id.toolbar);
+        assertEquals("1", tb.getTitle().toString());
+        tb.getMenu().performIdentifierAction(R.id.action_restore, 0);
+        for (int i = 0; i < 4; i++) settle();
+        assertEquals(2, ((RowAdapter) list.getAdapter()).rows().size());
+        int back = 0;
+        for (String n : new String[]{"Download/notes.txt", "Download/Invoice March.pdf", "Download/Old stuff"}) {
+            if (new File(storage, n).exists()) back++;
+        }
+        assertEquals("exactly one item was restored", 1, back);
+
+        // empty the trash
+        tb.getMenu().performIdentifierAction(R.id.action_empty, 0);
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        for (int i = 0; i < 4; i++) settle();
+        assertEquals(View.VISIBLE, t.findViewById(R.id.empty).getVisibility());
+        assertTrue(new Trash(storage).list().isEmpty());
+        shotOf(t, "31_trash_empty");
+        c.pause().stop().destroy();
+    }
+
+    @Test public void renameCanBeUndone() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_rename);
+        androidx.appcompat.app.AlertDialog dlg = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        findEditText(dlg.getWindow().getDecorView()).setText("todo.txt");
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertTrue(new File(storage, "Download/todo.txt").exists());
+        clickSnackbarAction();
+        assertTrue(new File(storage, "Download/notes.txt").exists());
+        assertFalse(new File(storage, "Download/todo.txt").exists());
+    }
+
+    @Test public void moveCanBeUndone() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_cut);
+        clickRow("Old stuff");
+        files().getView().findViewById(R.id.pasteGo).performClick();
+        waitUntil(() -> new File(storage, "Download/Old stuff/notes.txt").exists());
+        assertTrue(new File(storage, "Download/Old stuff/notes.txt").exists());
+        clickSnackbarAction();
+        assertTrue(new File(storage, "Download/notes.txt").exists());
+        assertFalse(new File(storage, "Download/Old stuff/notes.txt").exists());
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {
