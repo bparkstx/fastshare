@@ -10,8 +10,8 @@ android {
         applicationId 'com.fastshare.app'
         minSdk 30
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '2.0'
     }
 
     buildTypes {
@@ -19,6 +19,21 @@ android {
             minifyEnabled false
             // Signed with the standard debug key so the APK installs directly (sideloading).
             signingConfig signingConfigs.debug
+        }
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            all {
+                // Optional: point at a folder holding the Robolectric android-all jar to run offline.
+                def roboDir = System.getenv('ROBOLECTRIC_DIR')
+                if (roboDir) {
+                    systemProperty 'robolectric.offline', 'true'
+                    systemProperty 'robolectric.dependency.dir', roboDir
+                }
+                systemProperty 'shots.dir', "${buildDir}/shots"
+            }
         }
     }
 
@@ -30,4 +45,11 @@ android {
 
 dependencies {
     implementation 'com.google.zxing:core:3.5.3'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'androidx.test:core:1.6.1'
 }

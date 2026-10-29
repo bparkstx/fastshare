@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
   workflow_dispatch:
 
 permissions:
@@ -22,16 +22,38 @@ jobs:
           SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+      - name: Run tests (server, file operations and the app's screens)
+        run: ./gradlew --no-daemon testDebugUnitTest
       - name: Build release APK
         run: ./gradlew --no-daemon assembleRelease
       - uses: actions/upload-artifact@v4
         with:
           name: FastShare-apk
           path: app/build/outputs/apk/release/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screen-previews
+          path: app/build/shots/*.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-reports
+          path: app/build/reports/tests
+          if-no-files-found: ignore
       - name: Publish APK to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/release/app-release.apk FastShare.apk
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest FastShare.apk --title "FastShare APK" --notes "Latest build. Download FastShare.apk on your Android phone and open it to install."
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            gh release delete latest --yes --cleanup-tag || true
+            gh release create latest FastShare.apk --target "$GITHUB_SHA" --title "FastShare APK" \
+              --notes "Latest build. Download FastShare.apk on your Android phone and open it to install."
+          else
+            gh release delete preview --yes --cleanup-tag || true
+            gh release create preview FastShare.apk --target "$GITHUB_SHA" --prerelease \
+              --title "FastShare preview ($GITHUB_REF_NAME)" \
+              --notes "Test build from branch $GITHUB_REF_NAME. Not the main release."
+          fi

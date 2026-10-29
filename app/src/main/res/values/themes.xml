@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FastShare" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/fs_primary</item>
+        <item name="colorOnPrimary">@color/fs_on_primary</item>
+        <item name="colorPrimaryContainer">@color/fs_primary_soft</item>
+        <item name="colorOnPrimaryContainer">@color/fs_primary</item>
+        <item name="colorSecondaryContainer">@color/fs_primary_soft</item>
+        <item name="colorOnSecondaryContainer">@color/fs_primary</item>
+        <item name="colorSurface">@color/fs_card</item>
+        <item name="colorOnSurface">@color/fs_text</item>
+        <item name="colorOnSurfaceVariant">@color/fs_muted</item>
+        <item name="colorSurfaceContainer">@color/fs_card</item>
+        <item name="colorSurfaceContainerLow">@color/fs_card</item>
+        <item name="colorSurfaceContainerHigh">@color/fs_card</item>
+        <item name="colorSurfaceContainerHighest">@color/fs_primary_soft</item>
+        <item name="colorOutline">@color/fs_line</item>
+        <item name="colorOutlineVariant">@color/fs_line</item>
+        <item name="colorError">@color/fs_err</item>
+        <item name="android:colorBackground">@color/fs_bg</item>
+        <item name="android:statusBarColor">@color/fs_bg</item>
+        <item name="android:navigationBarColor">@color/fs_card</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+    </style>
+
+    <style name="FsCard" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">@color/fs_card</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/fs_line</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="FsSectionTitle">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/fs_muted</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+</resources>
