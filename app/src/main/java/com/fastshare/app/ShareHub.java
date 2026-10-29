@@ -64,7 +64,10 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
         public String label() {
             String ua = userAgent;
             String device;
-            if (ua.contains("iPhone")) device = "iPhone";
+            if (ua.contains("Microsoft-WebDAV") || ua.contains("Microsoft Office")) device = "Windows PC (drive)";
+            else if (ua.contains("WebDAVFS") || ua.contains("WebDAVLib")) device = "Mac (drive)";
+            else if (ua.contains("gvfs") || ua.contains("davfs") || ua.contains("neon")) device = "Computer (drive)";
+            else if (ua.contains("iPhone")) device = "iPhone";
             else if (ua.contains("iPad")) device = "iPad";
             else if (ua.contains("Android")) device = "Android phone";
             else if (ua.contains("Macintosh")) device = "Mac";
@@ -136,6 +139,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
         } catch (Exception e) {
             error = e.getMessage() == null ? e.toString() : e.getMessage();
         }
+        applyDrive();
         try {
             WifiManager wifi = (WifiManager) app.getSystemService(Context.WIFI_SERVICE);
             wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "fastshare");
@@ -211,6 +215,80 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
     public boolean everConnected() { return everConnected; }
     public List<FileServer.Transfer> transfers() { return transfers; }
     public History history() { return history; }
+
+    // ------------------------------------------------------------------ the phone as a drive
+
+    /** The folder the computer sees. */
+    public File driveRoot() {
+        String p = prefs.driveFolder();
+        File f = p.isEmpty() ? Environment.getExternalStorageDirectory() : new File(p);
+        return f.isDirectory() ? f : Environment.getExternalStorageDirectory();
+    }
+
+    public boolean driveEnabled() { return prefs.driveEnabled(); }
+
+    public boolean driveWritable() { return prefs.driveWritable(); }
+
+    public void setDrive(boolean enabled, File folder, boolean writable) {
+        prefs.setDriveEnabled(enabled);
+        prefs.setDriveFolder(folder == null ? "" : folder.getPath());
+        prefs.setDriveWritable(writable);
+        applyDrive();
+    }
+
+    /** Gives the drive a new secret address. Computers that had it mounted have to be given the new one. */
+    public void resetDriveAddress() {
+        prefs.newDriveToken();
+        applyDrive();
+    }
+
+    synchronized void applyDrive() {
+        if (server == null) return;
+        try {
+            if (prefs.driveEnabled() && Access.allFiles()) {
+                server.setDavToken(prefs.driveToken());
+                server.setDav(driveRoot(), prefs.driveWritable(), new WebDav.Deleter() {
+                    @Override public void delete(File f) throws IOException {
+                        // deleting from the computer goes to the same recycle bin as deleting on the phone
+                        try {
+                            new Trash(Environment.getExternalStorageDirectory()).trash(f);
+                        } catch (IOException e) {
+                            if (!FileOps.delete(f)) throw e;
+                        }
+                    }
+                });
+            } else {
+                server.setDav(null, false, null);
+            }
+        } catch (IOException e) {
+            error = e.getMessage();
+        }
+        changed();
+    }
+
+    /** The address to type into the computer, or null when the drive is off or the phone has no address. */
+    public String driveUrl() {
+        if (server == null || !server.davEnabled()) return null;
+        List<Net.Addr> addrs = net.addrs;
+        if (addrs.isEmpty()) return null;
+        Net.Addr a = addrs.get(addrIndex % addrs.size());
+        return "http://" + a.ip + ":" + port + server.davPath() + "/";
+    }
+
+    // ------------------------------------------------------------------ shared clipboard
+
+    public FileServer.Note addNote(String text) {
+        return server == null ? null : server.addNote(text, true);
+    }
+
+    public List<FileServer.Note> notes() {
+        return server == null ? new ArrayList<FileServer.Note>() : server.getNotes();
+    }
+
+    public void clearNotes() {
+        if (server != null) server.clearNotes();
+    }
+
 
     /** The PIN devices must enter after opening the link, or empty when there isn't one. */
     public String linkPin() { return prefs.linkPin(); }
@@ -342,6 +420,11 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
 
     @Override
     public void onSharedChanged() {
+        changed();
+    }
+
+    @Override
+    public void onNotesChanged() {
         changed();
     }
 

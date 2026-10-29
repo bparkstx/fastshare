@@ -144,7 +144,18 @@ public class MainActivity extends AppCompatActivity {
             ArrayList<Uri> list = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
             if (list != null) uris.addAll(list);
         }
-        if (uris.isEmpty()) return;
+        if (uris.isEmpty()) {
+            // plain text shared from another app (a link, an address) goes to the shared clipboard
+            CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            if (Intent.ACTION_SEND.equals(action) && text != null && text.toString().trim().length() > 0) {
+                hub.start();
+                hub.addNote(text.toString());
+                Toast.makeText(this, "Added to the shared clipboard", Toast.LENGTH_LONG).show();
+                showTransfer();
+                intent.setAction(Intent.ACTION_MAIN);
+            }
+            return;
+        }
         hub.start();
         hub.addUris(uris);
         Toast.makeText(this, "Added " + Fmt.plural(uris.size(), "file", "files") + " to send", Toast.LENGTH_LONG).show();

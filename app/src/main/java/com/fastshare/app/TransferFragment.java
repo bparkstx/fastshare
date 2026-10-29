@@ -56,8 +56,14 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
     private com.google.android.material.materialswitch.MaterialSwitch pinSwitch;
     private TextView pinText, pinHelp;
     private boolean pinBinding;
+    private boolean driveBinding;
+    private com.google.android.material.materialswitch.MaterialSwitch driveSwitch, driveWrite;
+    private View driveBox;
+    private TextView driveUrlText, driveFolderText, driveHelp;
     private ImageView qrView, helpChevron;
-    private LinearLayout sharedList, activityList;
+    private LinearLayout sharedList, activityList, noteList;
+    private android.widget.EditText noteInput;
+    private String lastNotesSig = "";
 
     private boolean qrShowJoin = true;
     private boolean helpUserSet;
@@ -125,6 +131,14 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         sharedList = v.findViewById(R.id.sharedList);
         activityCard = v.findViewById(R.id.activityCard);
         activityList = v.findViewById(R.id.activityList);
+        driveSwitch = v.findViewById(R.id.driveSwitch);
+        driveWrite = v.findViewById(R.id.driveWrite);
+        driveBox = v.findViewById(R.id.driveBox);
+        driveUrlText = v.findViewById(R.id.driveUrl);
+        driveFolderText = v.findViewById(R.id.driveFolderText);
+        driveHelp = v.findViewById(R.id.driveHelp);
+        noteList = v.findViewById(R.id.noteList);
+        noteInput = v.findViewById(R.id.noteInput);
         helpBody = v.findViewById(R.id.helpBody);
         helpText = v.findViewById(R.id.helpText);
         helpChevron = v.findViewById(R.id.helpChevron);
@@ -174,6 +188,69 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
             ((MainActivity) requireActivity()).showFiles(dir);
         });
         v.findViewById(R.id.sharedClear).setOnClickListener(x -> hub.clearShared());
+        driveSwitch.setOnCheckedChangeListener((b, on) -> {
+            if (driveBinding) return;
+            if (on && !Access.allFiles()) {
+                Toast.makeText(requireContext(), "Allow file access in the Files tab first, then try again.", Toast.LENGTH_LONG).show();
+                driveBinding = true;
+                driveSwitch.setChecked(false);
+                driveBinding = false;
+                return;
+            }
+            hub.setDrive(on, hub.driveRoot(), hub.driveWritable());
+            render();
+        });
+        driveWrite.setOnCheckedChangeListener((b, on) -> {
+            if (driveBinding) return;
+            hub.setDrive(true, hub.driveRoot(), on);
+            render();
+        });
+        v.findViewById(R.id.driveFolderBtn).setOnClickListener(x -> chooseDriveFolder());
+        v.findViewById(R.id.driveReset).setOnClickListener(x -> {
+            hub.resetDriveAddress();
+            Toast.makeText(requireContext(), "New address. Computers need it again.", Toast.LENGTH_SHORT).show();
+            render();
+        });
+        v.findViewById(R.id.driveCopy).setOnClickListener(x -> {
+            String url = hub.driveUrl();
+            if (url == null) return;
+            ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(ClipData.newPlainText("FileBandit drive", url));
+            Toast.makeText(requireContext(), "Address copied", Toast.LENGTH_SHORT).show();
+        });
+        v.findViewById(R.id.driveShare).setOnClickListener(x -> {
+            String url = hub.driveUrl();
+            if (url == null) return;
+            android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(android.content.Intent.EXTRA_TEXT, url);
+            startActivity(android.content.Intent.createChooser(send, "Share address"));
+        });
+        v.findViewById(R.id.noteSend).setOnClickListener(x -> {
+            String text = noteInput.getText().toString();
+            if (hub.addNote(text) == null) {
+                Toast.makeText(requireContext(), hub.isRunning() ? "Type something to send first." : "The server isn't running.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            noteInput.setText("");
+            render();
+        });
+        v.findViewById(R.id.notePaste).setOnClickListener(x -> {
+            ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            CharSequence text = null;
+            if (cm.hasPrimaryClip() && cm.getPrimaryClip() != null && cm.getPrimaryClip().getItemCount() > 0) {
+                text = cm.getPrimaryClip().getItemAt(0).coerceToText(requireContext());
+            }
+            if (text == null || hub.addNote(text.toString()) == null) {
+                Toast.makeText(requireContext(), "Nothing to paste. Copy some text first.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            render();
+        });
+        v.findViewById(R.id.notesClear).setOnClickListener(x -> {
+            hub.clearNotes();
+            render();
+        });
         v.findViewById(R.id.activityClear).setOnClickListener(x -> hub.clearFinishedTransfers());
         v.findViewById(R.id.helpHeader).setOnClickListener(x -> {
             helpUserSet = true;
@@ -403,6 +480,8 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
 
         renderShared();
         renderActivity();
+        renderNotes();
+        renderDrive();
         renderHelp();
     }
 
@@ -432,6 +511,78 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
             ((TextView) row.findViewById(R.id.sSub)).setText(s.dir ? "Folder, sent as a zip" : Fmt.bytes(s.size));
             row.findViewById(R.id.sRemove).setOnClickListener(x -> hub.removeShared(s.id));
             sharedList.addView(row);
+        }
+    }
+
+    private void chooseDriveFolder() {
+        File root = Environment.getExternalStorageDirectory();
+        final List<File> choices = new java.util.ArrayList<>();
+        choices.add(root);
+        File[] kids = root.listFiles();
+        if (kids != null) {
+            java.util.Arrays.sort(kids);
+            for (File k : kids) if (k.isDirectory() && !k.getName().startsWith(".") && !k.getName().equals("Android")) choices.add(k);
+        }
+        String[] names = new String[choices.size()];
+        int selected = 0;
+        for (int i = 0; i < names.length; i++) {
+            names[i] = i == 0 ? "All of internal storage" : choices.get(i).getName();
+            if (choices.get(i).equals(hub.driveRoot())) selected = i;
+        }
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Folder the computer can see")
+                .setSingleChoiceItems(names, selected, (d, which) -> {
+                    hub.setDrive(true, choices.get(which), hub.driveWritable());
+                    d.dismiss();
+                    render();
+                })
+                .setNegativeButton("Cancel", null).show();
+    }
+
+    private void renderDrive() {
+        boolean on = hub.driveEnabled() && Access.allFiles();
+        driveBinding = true;
+        driveSwitch.setChecked(on);
+        driveWrite.setChecked(hub.driveWritable());
+        driveBinding = false;
+        driveBox.setVisibility(on ? View.VISIBLE : View.GONE);
+        if (!on) return;
+        String url = hub.driveUrl();
+        driveUrlText.setText(url == null ? "This phone has no Wi-Fi or hotspot address yet." : url);
+        File root = hub.driveRoot();
+        driveFolderText.setText("Shared folder: " + (root.equals(Environment.getExternalStorageDirectory()) ? "all of internal storage" : root.getName()));
+        driveHelp.setText((hub.driveWritable()
+                ? "The computer can copy files in, rename and delete. Deleted things go to this phone's Trash.\n\n"
+                : "The computer can look and copy files off the phone, but can't change anything.\n\n")
+                + "Windows: File Explorer → right-click This PC → Map network drive → paste the address.\n"
+                + "Mac: Finder → Go → Connect to Server (⌘K) → paste the address.\n"
+                + "Linux: Files → Other Locations → type the address with dav:// instead of http://.\n\n"
+                + (hub.linkPin().isEmpty() ? "Anyone on this Wi-Fi who has the address can open it, so keep it to yourself."
+                : "A PIN is on, so the computer asks for a password: type the PIN (any user name). "
+                + "Windows only allows that over plain http after a one-time setting, so on Windows turn the PIN off or use the browser page."));
+    }
+
+    private void renderNotes() {
+        List<FileServer.Note> notes = hub.notes();
+        StringBuilder sig = new StringBuilder();
+        for (FileServer.Note n : notes) sig.append(n.id).append(';');
+        long now = System.currentTimeMillis();
+        sig.append(now / 60_000);           // the "x min ago" labels move once a minute
+        if (sig.toString().equals(lastNotesSig)) return;
+        lastNotesSig = sig.toString();
+        noteList.removeAllViews();
+        LayoutInflater inf = LayoutInflater.from(requireContext());
+        for (final FileServer.Note n : notes) {
+            View row = inf.inflate(R.layout.item_note_row, noteList, false);
+            ((TextView) row.findViewById(R.id.nText)).setText(n.text);
+            ((TextView) row.findViewById(R.id.nSub)).setText((n.fromPhone ? "You sent this" : "From the other device")
+                    + "  ·  " + Fmt.ago(n.time, now) + "  ·  tap to copy");
+            row.setOnClickListener(x -> {
+                ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(ClipData.newPlainText("FileBandit", n.text));
+                Toast.makeText(requireContext(), "Copied", Toast.LENGTH_SHORT).show();
+            });
+            noteList.addView(row);
         }
     }
 

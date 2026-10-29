@@ -49,6 +49,7 @@ public class FileServerTest {
     private final List<String> clients = new CopyOnWriteArrayList<>();
     private final List<FileServer.Transfer> finished = new CopyOnWriteArrayList<>();
     private final AtomicInteger sharedChanges = new AtomicInteger();
+    private final AtomicInteger noteChanges = new AtomicInteger();
     private final List<File> aborted = new CopyOnWriteArrayList<>();
     private volatile CountDownLatch terminal = new CountDownLatch(0);
 
@@ -75,6 +76,7 @@ public class FileServerTest {
         }, new FileServer.Listener() {
             @Override public void onClient(String ip, String ua) { clients.add(ip); }
             @Override public void onSharedChanged() { sharedChanges.incrementAndGet(); }
+            @Override public void onNotesChanged() { noteChanges.incrementAndGet(); }
             @Override public void onTransfer(FileServer.Transfer t) {
                 if (t.state != FileServer.State.ACTIVE) {
                     finished.add(t);
@@ -651,6 +653,66 @@ public class FileServerTest {
         assertEquals(200, c.getResponseCode());
         assertArrayEquals(data, Files.readAllBytes(new File(received, "signed.bin").toPath()));
     }
+
+    // ------------------------------------------------------------------ shared notes
+
+    private int postNote(String text) throws IOException {
+        HttpURLConnection c = open("/api/notes?t=" + TOKEN, "POST");
+        c.setDoOutput(true);
+        byte[] b = text.getBytes(StandardCharsets.UTF_8);
+        c.setFixedLengthStreamingMode(b.length);
+        try (OutputStream os = c.getOutputStream()) { os.write(b); }
+        int code = c.getResponseCode();
+        readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+        return code;
+    }
+
+    private String notesJson() throws IOException {
+        return new String(readAll(open("/api/notes?t=" + TOKEN, "GET").getInputStream()), StandardCharsets.UTF_8);
+    }
+
+    @Test public void notesFlowBothWaysNewestFirst() throws Exception {
+        assertEquals("[]", notesJson());
+        server.addNote("from the phone: https://example.com/a?b=1&c=\"2\"", true);
+        assertEquals(200, postNote("caf\u00e9 \u5199\u771f\nsecond line"));
+        String json = notesJson();
+        assertTrue(json, json.indexOf("caf\u00e9") < json.indexOf("from the phone"));
+        assertTrue(json, json.contains("\"from\":\"other\"") && json.contains("\"from\":\"phone\""));
+        assertTrue(json, json.contains("\\u000a"));                 // newline escaped, so the JSON stays valid
+        assertTrue(json, json.contains("\\\"2\\\""));               // quotes escaped
+        assertEquals(2, server.getNotes().size());
+        assertEquals(2, noteChanges.get());
+        assertFalse(server.getNotes().get(0).fromPhone);
+    }
+
+    @Test public void emptyAndHugeNotesAreRefused() throws Exception {
+        assertEquals(400, postNote("   \n  "));
+        assertEquals(413, postNote(new String(new char[4 * FileServer.NOTE_MAX_CHARS + 10]).replace('\0', 'x')));
+        assertEquals(0, server.getNotes().size());
+        FileServer.Note cut = server.addNote(new String(new char[FileServer.NOTE_MAX_CHARS + 500]).replace('\0', 'y'), true);
+        assertEquals(FileServer.NOTE_MAX_CHARS, cut.text.length());
+    }
+
+    @Test public void onlyTheNewestNotesAreKeptAndTheyCanBeClearedOrRemoved() throws Exception {
+        for (int i = 0; i < FileServer.NOTE_KEEP + 5; i++) server.addNote("n" + i, true);
+        assertEquals(FileServer.NOTE_KEEP, server.getNotes().size());
+        assertEquals("n" + (FileServer.NOTE_KEEP + 4), server.getNotes().get(0).text);
+        int id = server.getNotes().get(0).id;
+        server.removeNote(id);
+        assertEquals(FileServer.NOTE_KEEP - 1, server.getNotes().size());
+        HttpURLConnection c = open("/api/notes/clear?t=" + TOKEN, "POST");
+        c.setDoOutput(true);
+        c.setFixedLengthStreamingMode(0);
+        assertEquals(200, c.getResponseCode());
+        assertEquals("[]", notesJson());
+    }
+
+    @Test public void notesNeedTheTokenAndThePin() throws Exception {
+        assertEquals(403, open("/api/notes", "GET").getResponseCode());
+        server.setPin("4821");
+        assertEquals(401, open("/api/notes?t=" + TOKEN, "GET").getResponseCode());
+    }
+
 
     @Test public void fallsBackToAnotherPortWhenBusy() throws Exception {
         FileServer other = new FileServer("t", new FileServer.Backend() {

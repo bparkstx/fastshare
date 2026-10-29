@@ -3,5 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item android:id="@+id/action_lock" android:icon="@drawable/ic_lock" android:title="Lock now" app:showAsAction="always"/>
     <item android:id="@+id/action_change_pin" android:title="Change PIN" app:showAsAction="never"/>
+    <item android:id="@+id/action_decoy" android:title="Decoy vault…" app:showAsAction="never"/>
+    <item android:id="@+id/action_intruders" android:title="Wrong PIN tries" app:showAsAction="never"/>
     <item android:id="@+id/action_bio" android:title="Turn on fingerprint unlock" app:showAsAction="never"/>
 </menu>

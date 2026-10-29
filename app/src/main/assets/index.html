@@ -70,6 +70,13 @@
 
   #drop { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:9; background:rgba(26,115,232,.92); color:#fff; font-size:22px; font-weight:600; text-align:center; padding:24px; }
   #drop.on { display:flex; }
+  textarea { width:100%; font:16px/1.4 inherit; font-family:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line);
+             border-radius:12px; padding:10px 12px; resize:vertical; min-height:72px; }
+  .note { padding:10px 0; border-top:1px solid var(--line); }
+  .note:first-child { border-top:0; }
+  .note .txt { white-space:pre-wrap; word-break:break-word; font-size:15px; }
+  .note .txt a { color:var(--accent); }
+  .note .who { font-size:12px; color:var(--muted); margin-top:3px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
   details { color:var(--muted); font-size:14px; }
   summary { cursor:pointer; font-weight:600; color:var(--text); padding:2px 0; }
   details ul { padding-left:20px; margin:10px 0 0; }
@@ -111,6 +118,17 @@
     <p class="hint">Files the Android phone is sharing show up here. Tap <b>Download</b>, then <b>Download</b> again in the Safari prompt. Find them in the Files app under <b>Downloads</b>.</p>
     <div id="files"></div>
     <div class="refresh" id="refreshed"></div>
+  </section>
+
+  <section class="card">
+    <div class="step"><span class="num">3</span><h2>Shared clipboard</h2></div>
+    <p class="hint">Send a link, address or code to the Android phone, or copy one it sent you.</p>
+    <textarea id="noteText" placeholder="Type or paste here" aria-label="Text to send to the phone"></textarea>
+    <div class="btns" style="margin-top:8px">
+      <button class="btn" id="noteSend" type="button">Send to the phone</button>
+      <button class="btn alt" id="noteClear" type="button">Clear all</button>
+    </div>
+    <div id="notes" style="margin-top:8px"></div>
   </section>
 
   <section class="card">
@@ -457,8 +475,96 @@
     x.send();
   }
 
-  ping(); loadFiles();
-  setInterval(function () { ping(); loadFiles(); }, 3000);
+  // ---------- shared clipboard ----------
+  var notesEl = $('notes'), lastNotes = null;
+  function ago(t) {
+    var m = Math.floor((Date.now() - t) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    var h = Math.floor(m / 60);
+    return h < 24 ? h + ' h ago' : new Date(t).toLocaleDateString();
+  }
+  function linkify(into, text) {
+    text.split(/(https?:\/\/[^\s<>"']+)/).forEach(function (part, i) {
+      if (i % 2 === 1) {
+        var a = document.createElement('a');
+        a.href = part; a.textContent = part; a.target = '_blank'; a.rel = 'noopener';
+        into.appendChild(a);
+      } else if (part) {
+        into.appendChild(document.createTextNode(part));
+      }
+    });
+  }
+  function copyText(text, btn) {
+    function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1500); }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {            // plain http on a home network isn't a "secure context", so use the old way
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      if (ok) done(); else btn.textContent = 'Press and hold the text to copy';
+    }
+  }
+  function renderNotes(list) {
+    var sig = JSON.stringify(list.map(function (n) { return n.id; }));
+    if (sig === lastNotes) return;
+    lastNotes = sig;
+    notesEl.innerHTML = '';
+    if (!list.length) { notesEl.appendChild(el('div', 'empty', 'Nothing here yet.')); return; }
+    list.forEach(function (n) {
+      var row = el('div', 'note');
+      var txt = el('div', 'txt');
+      linkify(txt, n.text);
+      row.appendChild(txt);
+      var who = el('div', 'who');
+      who.appendChild(el('span', '', (n.from === 'phone' ? 'From the Android phone' : 'From this device') + ' · ' + ago(n.time)));
+      var b = el('button', 'btn small alt', 'Copy');
+      b.type = 'button';
+      b.onclick = function () { copyText(n.text, b); };
+      who.appendChild(b);
+      row.appendChild(who);
+      notesEl.appendChild(row);
+    });
+  }
+  function loadNotes() {
+    var x = new XMLHttpRequest();
+    x.open('GET', q('/api/notes'));
+    x.timeout = 4000;
+    x.onload = function () {
+      if (x.status === 401) return location.reload();
+      if (x.status !== 200) return;
+      try { renderNotes(JSON.parse(x.responseText)); } catch (e) {}
+    };
+    x.send();
+  }
+  $('noteSend').addEventListener('click', function () {
+    var box = $('noteText'), text = box.value;
+    if (!text.trim()) return;
+    var x = new XMLHttpRequest();
+    x.open('POST', q('/api/notes'));
+    x.setRequestHeader('Content-Type', 'text/plain; charset=utf-8');
+    x.onload = function () {
+      if (x.status === 401) return location.reload();
+      if (x.status === 200) { box.value = ''; lastNotes = null; loadNotes(); }
+      else if (x.status === 413) { alert('That is too long to send. Try a shorter piece.'); }
+    };
+    x.onerror = function () { alert('Could not reach the phone.'); };
+    x.send(text);
+  });
+  $('noteClear').addEventListener('click', function () {
+    var x = new XMLHttpRequest();
+    x.open('POST', q('/api/notes/clear'));
+    x.onload = function () { lastNotes = null; loadNotes(); };
+    x.send('');
+  });
+
+  ping(); loadFiles(); loadNotes();
+  setInterval(function () { ping(); loadFiles(); loadNotes(); }, 3000);
 })();
 </script>
 </body>

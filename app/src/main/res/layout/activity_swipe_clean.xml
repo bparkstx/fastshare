@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fs_bg"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="@color/fs_bg"
+        app:navigationIcon="@drawable/ic_back"
+        app:title="Clean up photos"
+        app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- the scan and what it found -->
+        <ScrollView
+            android:id="@+id/summaryBox"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/sIntro"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingBottom="8dp"
+                    android:text="Bandit looks through your photos for near-copies, blurry shots, black frames and old screenshots. You decide what goes: swipe left to move a photo to the Trash, right to keep it."
+                    android:textColor="@color/fs_muted"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:id="@+id/sScanBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <com.google.android.material.progressindicator.LinearProgressIndicator
+                        android:id="@+id/sBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:indeterminate="true" />
+
+                    <TextView
+                        android:id="@+id/sScanText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/fs_text"
+                        android:textSize="14sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/sStop"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Stop" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/sResults"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/sTrashed"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingTop="12dp"
+                    android:textColor="@color/fs_muted"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sRescan"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Scan again"
+                    app:cornerRadius="14dp" />
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- one photo at a time -->
+        <LinearLayout
+            android:id="@+id/reviewBox"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/rTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textColor="@color/fs_text"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="8dp"
+                android:layout_weight="1">
+
+                <ImageView
+                    android:id="@+id/rImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:layout_margin="12dp"
+                    android:contentDescription="Photo to review"
+                    android:scaleType="fitCenter" />
+
+                <TextView
+                    android:id="@+id/rStampKeep"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|start"
+                    android:layout_margin="28dp"
+                    android:background="@drawable/bg_stamp_keep"
+                    android:padding="8dp"
+                    android:rotation="-12"
+                    android:text="KEEP"
+                    android:textColor="#188038"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:alpha="0" />
+
+                <TextView
+                    android:id="@+id/rStampTrash"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="28dp"
+                    android:background="@drawable/bg_stamp_trash"
+                    android:padding="8dp"
+                    android:rotation="12"
+                    android:text="TRASH"
+                    android:textColor="#D93025"
+                    android:textSize="22sp"
+                    android:textStyle="bold"
+                    android:alpha="0" />
+
+                <ImageView
+                    android:id="@+id/rBest"
+                    android:layout_width="96dp"
+                    android:layout_height="96dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="20dp"
+                    android:background="@drawable/bg_card_soft"
+                    android:contentDescription="The photo being kept"
+                    android:padding="3dp"
+                    android:scaleType="centerCrop"
+                    android:visibility="gone" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/rInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="6dp"
+                android:textColor="@color/fs_muted"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rKeep"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:text="Keep"
+                    app:cornerRadius="16dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rUndo"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:text="Undo" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rTrash"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/fs_err"
+                    android:text="Trash"
+                    app:cornerRadius="16dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

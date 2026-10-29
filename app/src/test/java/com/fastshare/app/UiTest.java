@@ -13,6 +13,7 @@ import android.os.Environment;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -1448,6 +1449,7 @@ public class UiTest {
         if (VaultSession.testVault == null) {
             vaultDir = new File(storage.getParentFile(), "vault-test-" + System.nanoTime());
             VaultSession.testVault = new Vault(vaultDir, Vault.NO_OUTER, 1000);
+            VaultSession.testDecoy = new Vault(new File(storage.getParentFile(), "decoy-test-" + System.nanoTime()), Vault.NO_OUTER, 1000);
         }
         vaultController = Robolectric.buildActivity(VaultActivity.class).setup();
         VaultActivity a = vaultController.get();
@@ -1490,6 +1492,8 @@ public class UiTest {
             vaultController = null;
         }
         VaultSession.testVault = null;
+        VaultSession.testDecoy = null;
+        VaultSession.decoyActive = false;
         VaultSession.pending.clear();
         if (vaultDir != null) FileOps.delete(vaultDir);
         vaultDir = null;
@@ -2226,6 +2230,1077 @@ public class UiTest {
         settle();
         shotOf(v.get(), "114_dark_vault_setup");
         try { v.pause().stop().destroy(); } catch (Exception ignored) { }
+    }
+
+    // ------------------------------------------------------------------ shared clipboard
+
+    /** Posts text to the phone's own server the way the other device's page does. */
+    private static void postNoteFromOtherDevice(ShareHub hub, String text) throws Exception {
+        java.net.URL u = new java.net.URL(hub.currentUrl().replaceFirst("//[^:/]+", "//127.0.0.1").replaceFirst("/\\?t=", "/api/notes?t="));
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+        c.setRequestMethod("POST");
+        c.setDoOutput(true);
+        byte[] b = text.getBytes(StandardCharsets.UTF_8);
+        c.setFixedLengthStreamingMode(b.length);
+        try (java.io.OutputStream os = c.getOutputStream()) { os.write(b); }
+        assertEquals(200, c.getResponseCode());
+        c.getInputStream().close();
+    }
+
+    @Test public void sharedClipboardSendsAndReceivesText() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+
+        ((android.widget.EditText) v.findViewById(R.id.noteInput)).setText("https://example.com/wifi-password");
+        v.findViewById(R.id.noteSend).performClick();
+        settle();
+        assertEquals(1, hub.notes().size());
+        assertTrue(hub.notes().get(0).fromPhone);
+        assertEquals("the box is cleared after sending", "", ((android.widget.EditText) v.findViewById(R.id.noteInput)).getText().toString());
+
+        postNoteFromOtherDevice(hub, "Gate code 4455");
+        waitUntil(() -> ((android.widget.LinearLayout) v.findViewById(R.id.noteList)).getChildCount() == 2);
+        settle();
+        android.widget.LinearLayout list = v.findViewById(R.id.noteList);
+        assertEquals(2, list.getChildCount());
+        assertEquals("Gate code 4455", ((TextView) list.getChildAt(0).findViewById(R.id.nText)).getText().toString());
+        String sub = ((TextView) list.getChildAt(0).findViewById(R.id.nSub)).getText().toString();
+        assertTrue(sub, sub.startsWith("From the other device") && sub.endsWith("tap to copy"));
+        assertTrue(((TextView) list.getChildAt(1).findViewById(R.id.nSub)).getText().toString().startsWith("You sent this"));
+        shotScrollContent("120_transfer_clipboard", v);
+        shotView(v.findViewById(R.id.notesCard), "120b_clipboard_card");
+
+        // tapping a note copies it
+        list.getChildAt(0).performClick();
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        assertEquals("Gate code 4455", cm.getPrimaryClip().getItemAt(0).getText().toString());
+
+        v.findViewById(R.id.notesClear).performClick();
+        settle();
+        assertEquals(0, hub.notes().size());
+        assertEquals(0, ((android.widget.LinearLayout) v.findViewById(R.id.noteList)).getChildCount());
+    }
+
+    @Test public void pasteAndSendUsesTheClipboard() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("x", "copied elsewhere"));
+        v.findViewById(R.id.notePaste).performClick();
+        settle();
+        assertEquals("copied elsewhere", hub.notes().get(0).text);
+        v.findViewById(R.id.noteSend).performClick();       // empty box: nothing is added
+        assertEquals(1, hub.notes().size());
+    }
+
+    @Test public void textSharedFromAnotherAppLandsInTheClipboardCard() throws Exception {
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND)
+                .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "https://maps.example/place/42");
+        controller = Robolectric.buildActivity(MainActivity.class, i).setup();
+        activity = controller.get();
+        settle();
+        ShareHub hub = FastShareApp.hub(activity);
+        assertEquals(1, hub.notes().size());
+        assertEquals("https://maps.example/place/42", hub.notes().get(0).text);
+        assertTrue(transfer().isVisible());
+    }
+
+    // ------------------------------------------------------------------ phone as a drive
+
+    private static String davCall(ShareHub hub, String method, String rel, String body, String... headers) throws Exception {
+        String base = hub.driveUrl().replaceFirst("//[^:/]+", "//127.0.0.1");
+        okhttp3.Request.Builder b = new okhttp3.Request.Builder().url(base + rel).method(method,
+                body == null && !method.equals("PUT") && !method.equals("PROPFIND") ? null
+                        : okhttp3.RequestBody.create(body == null ? "" : body, okhttp3.MediaType.parse("application/xml")));
+        for (int i = 0; i + 1 < headers.length; i += 2) b.header(headers[i], headers[i + 1]);
+        try (okhttp3.Response r = new okhttp3.OkHttpClient().newCall(b.build()).execute()) {
+            return r.code() + " " + (r.body() == null ? "" : r.body().string());
+        }
+    }
+
+    @Test public void driveCardTurnsOnShowsAnAddressAndServesFiles() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertEquals(null, hub.driveUrl());
+
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.VISIBLE, v.findViewById(R.id.driveBox).getVisibility());
+        String url = ((TextView) v.findViewById(R.id.driveUrl)).getText().toString();
+        assertTrue(url, url.matches("http://192\\.168\\.23\\.33:\\d+/d/[a-z0-9]{14}/"));
+        assertEquals(url, hub.driveUrl());
+        assertTrue(((TextView) v.findViewById(R.id.driveHelp)).getText().toString().contains("can't change anything"));
+        shotScrollContent("121_transfer_drive", v);
+        shotView(v.findViewById(R.id.driveCard), "121b_drive_card");
+
+        // the computer can read, but by default not change
+        String listing = davCall(hub, "PROPFIND", "", "", "Depth", "1");
+        assertTrue(listing, listing.startsWith("207") && listing.contains("Download"));
+        assertTrue(davCall(hub, "PUT", "new.txt", "hi").startsWith("403"));
+        assertFalse(new File(storage, "new.txt").exists());
+
+        // allow changes: copy in, then delete (which goes to the recycle bin)
+        v.findViewById(R.id.driveWrite).performClick();
+        settle();
+        assertTrue(((TextView) v.findViewById(R.id.driveHelp)).getText().toString().contains("Deleted things go to this phone's Trash"));
+        assertTrue(davCall(hub, "PUT", "new.txt", "hi there").startsWith("201"));
+        assertEquals("hi there", new String(Files.readAllBytes(new File(storage, "new.txt").toPath()), StandardCharsets.UTF_8));
+        assertTrue(davCall(hub, "DELETE", "new.txt", null).startsWith("204"));
+        assertFalse(new File(storage, "new.txt").exists());
+        assertEquals("deleted from the computer = recoverable on the phone", 1, new Trash(storage).list().size());
+        assertEquals("new.txt", new Trash(storage).list().get(0).name);
+
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertEquals(null, hub.driveUrl());
+    }
+
+    @Test public void driveFolderCanBeChosenAndTheAddressSurvivesRestartsButCanBeReset() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        String first = hub.driveUrl();
+
+        v.findViewById(R.id.driveFolderBtn).performClick();
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        int downloadIndex = -1;
+        for (int i = 0; i < d.getListView().getCount(); i++) if ("Download".equals(String.valueOf(d.getListView().getItemAtPosition(i)))) downloadIndex = i;
+        assertTrue("Download is offered", downloadIndex > 0);
+        d.getListView().performItemClick(null, downloadIndex, downloadIndex);
+        settle();
+        assertEquals(new File(storage, "Download"), hub.driveRoot());
+        assertEquals("Shared folder: Download", ((TextView) v.findViewById(R.id.driveFolderText)).getText().toString());
+        String listing = davCall(hub, "PROPFIND", "", "", "Depth", "1");
+        assertTrue(listing, listing.contains("notes.txt") && !listing.contains("DCIM"));
+
+        // same address after the app restarts
+        ShareHub again = new ShareHub(activity);
+        again.start();
+        waitUntil(again::isRunning);
+        assertEquals(first.replaceFirst(":\\d+/", ":X/"), again.driveUrl().replaceFirst(":\\d+/", ":X/"));
+        again.stop();
+
+        // resetting gives a new one, and the old one stops working
+        v.findViewById(R.id.driveReset).performClick();
+        settle();
+        assertFalse(first.equals(hub.driveUrl()));
+        String oldBase = first.replaceFirst("//[^:/]+", "//127.0.0.1");
+        okhttp3.Request old = new okhttp3.Request.Builder().url(oldBase.replaceFirst(":\\d+/", ":" + hub.port() + "/")).method("PROPFIND",
+                okhttp3.RequestBody.create("", okhttp3.MediaType.parse("application/xml"))).header("Depth", "0").build();
+        try (okhttp3.Response r = new okhttp3.OkHttpClient().newCall(old).execute()) {
+            assertEquals(403, r.code());
+        }
+    }
+
+    @Test public void driveStaysOffWithoutFileAccess() throws Exception {
+        Access.testOverride = false;
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        v.findViewById(R.id.driveSwitch).performClick();
+        settle();
+        assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
+        assertFalse(((android.widget.CompoundButton) v.findViewById(R.id.driveSwitch)).isChecked());
+        assertFalse(FastShareApp.hub(activity).driveEnabled());
+    }
+
+    // ------------------------------------------------------------------ photo backup
+
+    private ActivityController<BackupActivity> backupController;
+    private MemoryRemote backupServer;
+
+    private void photoOnPhone(String rel, int size, long modified) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        byte[] b = new byte[size];
+        new java.util.Random(rel.hashCode()).nextBytes(b);
+        Files.write(f.toPath(), b);
+        assertTrue(f.setLastModified(modified));
+    }
+
+    private BackupActivity openBackup() {
+        backupController = Robolectric.buildActivity(BackupActivity.class).setup();
+        BackupActivity a = backupController.get();
+        settle();
+        return a;
+    }
+
+    private Connection backupSetup() throws Exception {
+        backupServer = new MemoryRemote();
+        RemoteSession.reset();
+        Remotes.testOpener = c -> {
+            if (c.host.equals("down.local")) throw new IOException(Remotes.friendly(new java.net.ConnectException("refused"), c));
+            return backupServer;
+        };
+        long old = new java.util.GregorianCalendar(2026, java.util.Calendar.MARCH, 5, 10, 0).getTimeInMillis();
+        photoOnPhone("DCIM/Camera/IMG_A.jpg", 3000, old);
+        photoOnPhone("DCIM/Camera/IMG_B.mp4", 5000, old + 86_400_000L * 40);
+        photoOnPhone("Pictures/Screenshots/shot.png", 2000, old);
+        new File(storage, "DCIM/Camera/IMG_20260101_101010.jpg").setLastModified(old);   // from the shared sample set
+        return saveConnection("Home NAS", "nas.local", Connection.Type.SFTP);
+    }
+
+    @After
+    public void tearDownBackup() {
+        if (backupController != null) {
+            try { backupController.pause().stop().destroy(); } catch (Exception ignored) { }
+            backupController = null;
+        }
+    }
+
+    @Test public void backupScreenInvitesYouToAddAServerFirst() throws Exception {
+        RemoteSession.reset();
+        BackupActivity a = openBackup();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.bNoConn).getVisibility());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.bAddConn).getVisibility());
+        assertEquals("Nothing has been backed up yet.", ((TextView) a.findViewById(R.id.bStatus)).getText().toString());
+        assertFalse(a.findViewById(R.id.bRunNow).isEnabled());
+        a.findViewById(R.id.bAuto).performClick();                    // can't switch on without a destination
+        settle();
+        assertFalse(((android.widget.CompoundButton) a.findViewById(R.id.bAuto)).isChecked());
+        assertFalse(new Prefs(a).backupOn());
+        shotOf(a, "130_backup_empty");
+    }
+
+    @Test public void backUpNowSendsNewPhotosIntoYearAndMonthFolders() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        assertTrue(a.findViewById(R.id.bRunNow).isEnabled());
+        assertEquals("/FileBandit Backup/" + android.os.Build.MODEL.trim(), ((EditText) a.findViewById(R.id.bDest)).getText().toString().replace("Android", android.os.Build.MODEL.trim()));
+        ((EditText) a.findViewById(R.id.bDest)).setText("/Phone backup");
+        settle();
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && !backupServer.allFiles().isEmpty());
+        settle();
+        java.util.List<String> sent = backupServer.allFiles();
+        assertTrue(sent.toString(), sent.contains("/Phone backup/2026/03/IMG_A.jpg"));
+        assertTrue(sent.toString(), sent.contains("/Phone backup/2026/04/IMG_B.mp4"));
+        assertFalse("Pictures isn't selected, so screenshots stay", sent.toString().contains("shot.png"));
+        assertEquals(3000, backupServer.files.get("/Phone backup/2026/03/IMG_A.jpg").length);
+        String status = ((TextView) a.findViewById(R.id.bStatus)).getText().toString();
+        assertTrue(status, status.startsWith("Last backup just now: Sent "));
+        shotOf(a, "131_backup_done");
+
+        // a second run has nothing new
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning());
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.bStatus)).getText().toString(), ((TextView) a.findViewById(R.id.bStatus)).getText().toString().endsWith("Everything was already backed up"));
+    }
+
+    @Test public void folderChoicesAndOptionsAreSavedAndUsed() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        ((android.widget.CompoundButton) a.findViewById(R.id.bPics)).setChecked(true);
+        ((android.widget.CompoundButton) a.findViewById(R.id.bVideos)).setChecked(false);
+        ((android.widget.CompoundButton) a.findViewById(R.id.bByDate)).setChecked(false);
+        ((EditText) a.findViewById(R.id.bDest)).setText("Flat");
+        settle();
+        Prefs p = new Prefs(a);
+        assertTrue(p.backupFolders().containsAll(java.util.Arrays.asList("DCIM", "Pictures")));
+        assertFalse(p.backupVideos());
+        assertFalse(p.backupByDate());
+        assertEquals("Flat", p.backupDest());
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && !backupServer.allFiles().isEmpty());
+        settle();
+        java.util.List<String> sent = backupServer.allFiles();
+        assertTrue(sent.toString(), sent.contains("/Flat/IMG_A.jpg") && sent.contains("/Flat/shot.png"));
+        assertFalse("videos are off", sent.toString().contains(".mp4"));
+    }
+
+    @Test public void autoBackupSchedulesWifiOnlyWorkAndSwitchingOffCancelsIt() throws Exception {
+        Connection c = backupSetup();
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(RuntimeEnvironment.getApplication());
+        BackupActivity a = openBackup();
+        a.findViewById(R.id.bAuto).performClick();
+        settle();
+        assertTrue(new Prefs(a).backupOn());
+        assertEquals(c.id, new Prefs(a).backupConnection());
+        java.util.List<androidx.work.WorkInfo> infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertEquals(1, infos.size());
+        assertEquals(androidx.work.WorkInfo.State.ENQUEUED, infos.get(0).getState());
+        assertEquals(androidx.work.NetworkType.UNMETERED, infos.get(0).getConstraints().getRequiredNetworkType());
+        assertTrue(infos.get(0).getConstraints().requiresBatteryNotLow());
+        assertFalse(infos.get(0).getConstraints().requiresCharging());
+
+        ((android.widget.CompoundButton) a.findViewById(R.id.bCharging)).setChecked(true);
+        settle();
+        infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertTrue("only while charging is passed on", infos.get(0).getConstraints().requiresCharging());
+
+        a.findViewById(R.id.bAuto).performClick();
+        settle();
+        infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertEquals(androidx.work.WorkInfo.State.CANCELLED, infos.get(0).getState());
+    }
+
+    @Test public void theScheduledWorkerBacksUpAndRetriesWhenTheServerIsOutOfReach() throws Exception {
+        Connection c = backupSetup();
+        Prefs p = new Prefs(RuntimeEnvironment.getApplication());
+        p.setBackupConnection(c.id);
+        p.setBackupDest("/Auto");
+        p.setBackupOn(false);
+        androidx.work.ListenableWorker w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals("switched off: does nothing", androidx.work.ListenableWorker.Result.success(), w.startWork().get());
+        assertTrue(backupServer.allFiles().isEmpty());
+
+        p.setBackupOn(true);
+        w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals(androidx.work.ListenableWorker.Result.success(), w.startWork().get());
+        assertTrue(backupServer.allFiles().toString(), backupServer.allFiles().contains("/Auto/2026/03/IMG_A.jpg"));
+
+        // away from home: the server can't be reached, so ask WorkManager to try again later
+        Connection away = saveConnection("Away", "down.local", Connection.Type.SFTP);
+        p.setBackupConnection(away.id);
+        w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals(androidx.work.ListenableWorker.Result.retry(), w.startWork().get());
+        assertTrue(p.backupLast(), p.backupLast().startsWith("Couldn't connect: Can't reach down.local"));
+    }
+
+    @Test public void freeingSpaceMovesOnlyVerifiedBackedUpPhotosToTheTrash() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        ((EditText) a.findViewById(R.id.bDest)).setText("/B");
+        settle();
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && backupServer.allFiles().size() >= 3);
+        settle();
+        // one of the backed-up files was deleted from the server by hand
+        backupServer.files.remove("/B/2026/04/IMG_B.mp4");
+
+        a.findViewById(R.id.bFree).performClick();
+        waitUntil(() -> org.robolectric.shadows.ShadowDialog.getLatestDialog() instanceof androidx.appcompat.app.AlertDialog
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).isShowing());
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        shotDialog(d, "132_backup_free_space");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> !new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        settle();
+        assertFalse(new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        assertTrue("not on the server any more, so it stays on the phone", new File(storage, "DCIM/Camera/IMG_B.mp4").exists());
+        assertTrue("Pictures wasn't part of the backup", new File(storage, "Pictures/Screenshots/shot.png").exists());
+        java.util.List<String> trashed = new ArrayList<>();
+        for (Trash.Entry e : new Trash(storage).list()) trashed.add(e.name);
+        assertTrue(trashed.toString(), trashed.contains("IMG_A.jpg") && !trashed.contains("IMG_B.mp4"));
+    }
+
+    @Test public void backupTileOnTheHomeScreenOpensTheScreen() throws Exception {
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        android.view.ViewGroup row2 = (android.view.ViewGroup) tools.getChildAt(1);
+        assertEquals("Backup", ((TextView) row2.getChildAt(0).findViewById(R.id.tileLabel)).getText().toString());
+        row2.getChildAt(0).performClick();
+        assertEquals(BackupActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    // ------------------------------------------------------------------ decoy vault
+
+    private void vaultMenu(VaultActivity a, int id) {
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(id, 0);
+        settle();
+    }
+
+    private void typeAndUnlock(VaultActivity a, String pin) {
+        type(a, R.id.pinInput, pin);
+        tapAuth(a);
+    }
+
+    @Test public void decoyPinOpensADifferentVaultAndHidesTheDecoySettings() throws Exception {
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        // set up the decoy
+        vaultMenu(a, R.id.action_decoy);
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        shotDialog(d, "140_vault_decoy_setup");
+        android.view.ViewGroup box = (android.view.ViewGroup) ((android.view.ViewGroup) d.findViewById(androidx.appcompat.R.id.custom)).getChildAt(0);
+        EditText one = null, two = null;
+        for (int i = 0; i < box.getChildCount(); i++) {
+            if (box.getChildAt(i) instanceof EditText) {
+                if (one == null) one = (EditText) box.getChildAt(i); else two = (EditText) box.getChildAt(i);
+            }
+        }
+        one.setText("2468");                                    // the real PIN: refused
+        two.setText("2468");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNotNull("must differ from the real PIN", one.getError());
+        assertFalse(VaultSession.decoy(a).exists());
+        one.setText("1357");
+        two.setText("1358");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNotNull(two.getError());
+        two.setText("1357");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertTrue(VaultSession.decoy(a).exists());
+        assertFalse("creating it leaves it locked", VaultSession.decoy(a).isUnlocked());
+
+        // put a real file in the real vault
+        VaultSession.real(a).add(new java.io.ByteArrayInputStream("secret".getBytes()), "secret.txt", 1L);
+
+        // lock, then open with the decoy PIN: empty, and no decoy/wrong-PIN items in the menu
+        vaultMenu(a, R.id.action_lock);
+        typeAndUnlock(a, "1357");
+        assertTrue(VaultSession.decoyActive);
+        assertEquals(View.VISIBLE, a.findViewById(R.id.listBox).getVisibility());
+        assertTrue("the real file isn't in the decoy", vaultRows(a).isEmpty());
+        assertEquals("looks like a normal vault", "Private vault", ((MaterialToolbar) a.findViewById(R.id.toolbar)).getTitle().toString());
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        assertFalse(tb.getMenu().findItem(R.id.action_decoy).isVisible());
+        assertFalse(tb.getMenu().findItem(R.id.action_intruders).isVisible());
+        assertFalse(tb.getMenu().findItem(R.id.action_bio).isVisible());
+        assertTrue(tb.getMenu().findItem(R.id.action_change_pin).isVisible());
+        // add something to the decoy, then reopen it: the file is there
+        VaultSession.decoy(a).add(new java.io.ByteArrayInputStream("holiday".getBytes()), "holiday.jpg", 1L);
+        vaultMenu(a, R.id.action_lock);
+        typeAndUnlock(a, "1357");
+        waitUntil(() -> vaultRows(a).contains("holiday.jpg"));
+        settle();
+        assertEquals(java.util.Arrays.asList("holiday.jpg"), vaultRows(a));
+        shotOf(a, "141_vault_decoy_open");
+
+        // lock again; the real PIN opens the real vault with the real file
+        vaultMenu(a, R.id.action_lock);
+        assertFalse(VaultSession.decoyActive);
+        typeAndUnlock(a, "2468");
+        assertFalse(VaultSession.decoyActive);
+        waitUntil(() -> vaultRows(a).contains("secret.txt"));
+        assertEquals(java.util.Arrays.asList("secret.txt"), vaultRows(a));
+        assertTrue(((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().findItem(R.id.action_decoy).isVisible());
+    }
+
+    @Test public void wrongPinsAreLoggedAndShownToTheOwnerButNotInsideTheDecoy() throws Exception {
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        VaultSession.decoy(a).create("1357".toCharArray());
+        VaultSession.decoy(a).lock();
+        vaultMenu(a, R.id.action_lock);
+
+        typeAndUnlock(a, "0000");
+        typeAndUnlock(a, "9999");
+        assertEquals(2, VaultSession.intruders(a).list().size());
+        assertFalse(VaultSession.get(a).isUnlocked());
+
+        // inside the decoy nothing is revealed
+        typeAndUnlock(a, "1357");
+        assertTrue(VaultSession.decoyActive);
+        settle();
+        assertFalse("no popup in the decoy", org.robolectric.shadows.ShadowDialog.getLatestDialog() != null
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).isShowing()
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getWindow().getDecorView().toString().contains("wrong"));
+        assertEquals("still logged", 2, VaultSession.intruders(a).list().size());
+        vaultMenu(a, R.id.action_lock);
+
+        // the owner's own PIN shows what happened
+        typeAndUnlock(a, "2468");
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        assertTrue(d.isShowing());
+        shotDialog(d, "142_vault_intruders");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();               // OK clears it
+        settle();
+        assertEquals(0, VaultSession.intruders(a).list().size());
+    }
+
+    // ------------------------------------------------------------------ swipe to clean
+
+    /** A real picture file: soft gradient, rectangles and grain, so the cleaner has something to look at. */
+    private File picture(String rel, long seed, int w, int h, int blurDown, long modified, boolean dark) throws Exception {
+        return picture(rel, seed, w, h, blurDown, modified, dark, w);
+    }
+
+    /** {@code outW} saves a smaller copy of the same scene (the scene itself is always drawn at w x h). */
+    private File picture(String rel, long seed, int w, int h, int blurDown, long modified, boolean dark, int outW) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        Bitmap bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bm);
+        if (dark) {
+            c.drawColor(0xFF010101);
+        } else {
+            java.util.Random r = new java.util.Random(seed);
+            android.graphics.Paint p = new android.graphics.Paint();
+            c.drawColor(android.graphics.Color.rgb(60 + r.nextInt(60), 90 + r.nextInt(80), 120 + r.nextInt(100)));
+            for (int i = 0; i < 16; i++) {
+                p.setColor(android.graphics.Color.rgb(r.nextInt(256), r.nextInt(256), r.nextInt(256)));
+                int x = r.nextInt(w - 20), y = r.nextInt(h - 20);
+                c.drawRect(x, y, x + 10 + r.nextInt(w / 3), y + 10 + r.nextInt(h / 3), p);
+            }
+            java.util.Random grain = new java.util.Random(seed * 17);
+            p.setStrokeWidth(1);
+            for (int i = 0; i < w * h / 6; i++) {
+                int v = 100 + grain.nextInt(120);
+                p.setColor(android.graphics.Color.argb(70, v, v, v));
+                c.drawPoint(grain.nextInt(w), grain.nextInt(h), p);
+            }
+        }
+        if (blurDown > 1) {
+            Bitmap small = Bitmap.createScaledBitmap(bm, Math.max(2, w / blurDown), Math.max(2, h / blurDown), true);
+            bm = Bitmap.createScaledBitmap(small, w, h, true);
+        }
+        if (outW != w) bm = Bitmap.createScaledBitmap(bm, outW, h * outW / w, true);
+        try (FileOutputStream os = new FileOutputStream(f)) {
+            // the test runtime can write JPEG but not read it back, so the content is PNG; the decoder goes by content, not by name
+            bm.compress(Bitmap.CompressFormat.PNG, 100, os);
+        }
+        assertTrue(f.setLastModified(modified));
+        return f;
+    }
+
+    private ActivityController<SwipeCleanActivity> cleanController;
+
+    private long hoursAgo(int h) {
+        return System.currentTimeMillis() - h * 3600_000L;
+    }
+
+    private void makePhotoLibrary() throws Exception {
+        picture("DCIM/Camera/IMG_A.jpg", 1, 640, 480, 1, hoursAgo(50), false);
+        picture("DCIM/Camera/IMG_A_copy.jpg", 1, 640, 480, 1, hoursAgo(49), false, 320);     // same scene, smaller
+        picture("DCIM/Camera/IMG_B.jpg", 2, 640, 480, 1, hoursAgo(40), false);
+        picture("DCIM/Camera/IMG_BLUR.jpg", 3, 640, 480, 24, hoursAgo(30), false);
+        picture("DCIM/Camera/IMG_BLACK.jpg", 4, 640, 480, 1, hoursAgo(20), true);
+        picture("Pictures/Screenshots/Screenshot_old.png", 5, 540, 1170, 1, System.currentTimeMillis() - 200L * 24 * 3600_000, false);
+    }
+
+    private SwipeCleanActivity openClean() {
+        cleanController = Robolectric.buildActivity(SwipeCleanActivity.class).setup();
+        SwipeCleanActivity a = cleanController.get();
+        waitUntil(() -> ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildCount() == 4);
+        settle();
+        return a;
+    }
+
+    private static String rowSub(android.app.Activity a, int row) {
+        return ((TextView) ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildAt(row).findViewById(R.id.cSub)).getText().toString();
+    }
+
+    private static void review(android.app.Activity a, int row) {
+        ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildAt(row).findViewById(R.id.cReview).performClick();
+        settle();
+    }
+
+    @After
+    public void tearDownClean() {
+        if (cleanController != null) {
+            try { cleanController.pause().stop().destroy(); } catch (Exception ignored) { }
+            cleanController = null;
+        }
+    }
+
+    @Test public void photoCleanerFindsCopiesBlurBlackFramesAndOldScreenshotsInRealPictures() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        assertTrue(rowSub(a, 0), rowSub(a, 0).startsWith("1 photo"));            // near-copies: the smaller copy
+        assertTrue(rowSub(a, 1), rowSub(a, 1).startsWith("1 photo"));            // blurry
+        assertTrue(rowSub(a, 2), rowSub(a, 2).startsWith("1 photo"));            // black
+        assertTrue(rowSub(a, 3), rowSub(a, 3).startsWith("1 photo"));            // old screenshot
+        String intro = ((TextView) a.findViewById(R.id.sIntro)).getText().toString();
+        assertTrue(intro, intro.startsWith("Looked at 6 photos"));
+        shotOf(a, "150_clean_summary");
+
+        review(a, 0);
+        assertEquals(View.VISIBLE, a.findViewById(R.id.reviewBox).getVisibility());
+        assertEquals("1 of 1", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        String info = ((TextView) a.findViewById(R.id.rInfo)).getText().toString();
+        assertTrue(info, info.contains("IMG_A_copy.jpg") && info.contains("IMG_A.jpg, which is the better one"));
+        assertEquals(View.VISIBLE, a.findViewById(R.id.rBest).getVisibility());
+        waitUntil(() -> ((android.widget.ImageView) a.findViewById(R.id.rImage)).getDrawable() != null);
+        settle();
+        shotOf(a, "151_clean_card");
+    }
+
+    @Test public void trashingKeepingAndUndoingWorkAndKeptPhotosAreNotSuggestedAgain() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        File copy = new File(storage, "DCIM/Camera/IMG_A_copy.jpg");
+        File blur = new File(storage, "DCIM/Camera/IMG_BLUR.jpg");
+
+        review(a, 0);
+        a.findViewById(R.id.rTrash).performClick();
+        settle();
+        assertFalse("moved to the Trash", copy.exists());
+        assertTrue("the better one stays", new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.summaryBox).getVisibility());
+        assertEquals("None found", rowSub(a, 0));
+        assertTrue(((TextView) a.findViewById(R.id.sTrashed)).getText().toString().startsWith("Moved to the Trash so far: 1 photo"));
+        assertEquals(1, new Trash(storage).list().size());
+
+        // undo from the next review: go into blurry, keep it, then undo the keep
+        review(a, 1);
+        a.findViewById(R.id.rKeep).performClick();
+        settle();
+        assertTrue(blur.exists());
+        assertEquals(1, new Prefs(a).cleanKept().size());
+        assertEquals("None found", rowSub(a, 1));
+
+        // scanning again doesn't bring the kept photo back
+        a.findViewById(R.id.sRescan).performClick();
+        waitUntil(() -> ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildCount() == 4);
+        settle();
+        assertEquals("None found", rowSub(a, 1));
+        assertEquals("None found", rowSub(a, 0));
+    }
+
+    @Test public void undoPutsATrashedPhotoBackWhereItWas() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        File shot = new File(storage, "Pictures/Screenshots/Screenshot_old.png");
+        long size = shot.length();
+        review(a, 3);
+        assertFalse(a.findViewById(R.id.rUndo).isEnabled());
+        a.findViewById(R.id.rTrash).performClick();
+        settle();
+        assertFalse(shot.exists());
+        // the review ended (it was the only one), so open the blurry group, which has an Undo that reaches the last decision
+        review(a, 1);
+        assertTrue(a.findViewById(R.id.rUndo).isEnabled());
+        a.findViewById(R.id.rUndo).performClick();
+        settle();
+        assertTrue("restored", shot.exists());
+        assertEquals(size, shot.length());
+        assertEquals(0, new Trash(storage).list().size());
+    }
+
+    @Test public void swipingLeftTrashesAndSwipingRightKeeps() throws Exception {
+        makePhotoLibrary();
+        picture("DCIM/Camera/IMG_BLUR2.jpg", 6, 640, 480, 24, hoursAgo(29), false);
+        SwipeCleanActivity a = openClean();
+        review(a, 1);
+        assertEquals("1 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        View card = a.findViewById(R.id.rImage);
+        layoutOf(a);
+        android.os.SystemClock.setCurrentTimeMillis(android.os.SystemClock.uptimeMillis());
+        float w = card.getWidth();
+        long t = android.os.SystemClock.uptimeMillis();
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, 500f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_MOVE, 500f - w * 0.45f, 500f, 0));
+        assertTrue("the TRASH stamp fades in", a.findViewById(R.id.rStampTrash).getAlpha() > 0.9f);
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 100, android.view.MotionEvent.ACTION_UP, 500f - w * 0.45f, 500f, 0));
+        waitUntil(() -> "2 of 2".equals(((TextView) a.findViewById(R.id.rTitle)).getText().toString()));
+        settle();
+        assertEquals("2 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        assertEquals(1, new Trash(storage).list().size());
+
+        // a short drag springs back and decides nothing
+        t = android.os.SystemClock.uptimeMillis();
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, 500f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_MOVE, 500f + w * 0.1f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 100, android.view.MotionEvent.ACTION_UP, 500f + w * 0.1f, 500f, 0));
+        settle();
+        assertEquals("2 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        assertEquals(1, new Trash(storage).list().size());
+    }
+
+    @Test public void cleanerNeedsFileAccess() throws Exception {
+        Access.testOverride = false;
+        cleanController = Robolectric.buildActivity(SwipeCleanActivity.class).setup();
+        SwipeCleanActivity a = cleanController.get();
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.sIntro)).getText().toString().contains("Allow file access"));
+    }
+
+    // ------------------------------------------------------------------ document scanner
+
+    private ActivityController<ScanActivity> scanController;
+
+    @After
+    public void tearDownScan() {
+        if (scanController != null) {
+            try { scanController.pause().stop().destroy(); } catch (Exception ignored) { }
+            scanController = null;
+        }
+    }
+
+    private File photoOfAPage(String name, long seed) throws Exception {
+        DocScan.Img img = DocScanTest.photo(800, 600, DocScanTest.PX, DocScanTest.PY, true, seed);
+        Bitmap b = Bitmap.createBitmap(img.px, img.w, img.h, Bitmap.Config.ARGB_8888);
+        File f = new File(storage.getParentFile(), name);
+        try (FileOutputStream os = new FileOutputStream(f)) { b.compress(Bitmap.CompressFormat.PNG, 100, os); }
+        return f;
+    }
+
+    private ScanActivity openScan() {
+        scanController = Robolectric.buildActivity(ScanActivity.class).setup();
+        ScanActivity a = scanController.get();
+        settle();
+        return a;
+    }
+
+    private void addPage(ScanActivity a, File photo) {
+        int before = a.pageCount();
+        a.addFromFile(photo);
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        a.findViewById(R.id.cropDone).performClick();
+        waitUntil(() -> a.pageCount() == before + 1 && a.currentPreview() != null);
+        settle();
+    }
+
+    @Test public void scannerStartsWithTwoWaysToGetAPhoto() throws Exception {
+        ScanActivity a = openScan();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.emptyBox).getVisibility());
+        assertEquals(View.GONE, a.findViewById(R.id.pagesBox).getVisibility());
+        shotOf(a, "160_scan_empty");
+        a.findViewById(R.id.eGallery).performClick();
+        android.content.Intent pick = shadowOf(a).getNextStartedActivityForResult().intent;
+        assertEquals(android.content.Intent.ACTION_GET_CONTENT, pick.getAction());
+        assertEquals("image/*", pick.getType());
+        a.findViewById(R.id.eCamera).performClick();
+        android.content.Intent cam = shadowOf(a).getNextStartedActivityForResult().intent;
+        assertEquals(android.provider.MediaStore.ACTION_IMAGE_CAPTURE, cam.getAction());
+        android.net.Uri out = cam.getParcelableExtra(android.provider.MediaStore.EXTRA_OUTPUT);
+        assertNotNull("the camera app is told where to put the photo", out);
+        assertTrue(out.toString(), out.toString().contains(a.getPackageName() + ".fileprovider"));
+    }
+
+    @Test public void aPhotoOfAPageIsFoundStraightenedAndCleaned() throws Exception {
+        ScanActivity a = openScan();
+        a.addFromFile(photoOfAPage("page1.png", 1));
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        CropView cv = a.findViewById(R.id.cropView);
+        DocScan.Quad q = cv.getQuad();
+        for (int i = 0; i < 4; i++) {
+            double d = Math.hypot(q.x[i] - DocScanTest.PX[i], q.y[i] - DocScanTest.PY[i]);
+            assertTrue("corner " + i + " found within " + d, d < 30);
+        }
+        shotOf(a, "161_scan_crop");
+
+        // corners that cross over aren't accepted
+        float[] c2 = cv.cornerOnScreen(2);
+        cv.moveTo(0, c2[0], c2[1]);
+        a.findViewById(R.id.cropDone).performClick();
+        assertEquals("still cropping", View.VISIBLE, a.findViewById(R.id.cropBox).getVisibility());
+        cv.setQuad(q);
+        a.findViewById(R.id.cropDone).performClick();
+        waitUntil(() -> a.pageCount() == 1 && a.currentPreview() != null);
+        settle();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.pagesBox).getVisibility());
+        assertEquals("Page 1 of 1", ((TextView) a.findViewById(R.id.pageInfo)).getText().toString());
+        Bitmap prev = a.currentPreview();
+        double expectedRatio = Math.max(Math.hypot(DocScanTest.PX[0] - DocScanTest.PX[3], DocScanTest.PY[0] - DocScanTest.PY[3]),
+                Math.hypot(DocScanTest.PX[1] - DocScanTest.PX[2], DocScanTest.PY[1] - DocScanTest.PY[2]))
+                / Math.max(Math.hypot(DocScanTest.PX[0] - DocScanTest.PX[1], DocScanTest.PY[0] - DocScanTest.PY[1]),
+                Math.hypot(DocScanTest.PX[3] - DocScanTest.PX[2], DocScanTest.PY[3] - DocScanTest.PY[2]));
+        assertEquals("page shape is right", expectedRatio, prev.getHeight() / (double) prev.getWidth(), 0.06);
+        int gap = prev.getPixel((int) (prev.getWidth() * 0.85), (int) (prev.getHeight() * (0.12 + 0.065)));
+        assertTrue("paper comes out white: " + Integer.toHexString(gap), (gap & 0xFF) > 220 && ((gap >> 16) & 0xFF) > 220);
+        shotOf(a, "162_scan_page");
+
+        // looks
+        a.findViewById(R.id.lookBw).performClick();
+        waitUntil(() -> { Bitmap b = a.currentPreview(); return b != prev; });
+        settle();
+        Bitmap bw = a.currentPreview();
+        int sample = bw.getPixel(bw.getWidth() / 2, bw.getHeight() / 2);
+        assertTrue("black and white only: " + Integer.toHexString(sample), (sample & 0xFFFFFF) == 0 || (sample & 0xFFFFFF) == 0xFFFFFF);
+        // turning swaps the sides
+        int w0 = bw.getWidth(), h0 = bw.getHeight();
+        a.findViewById(R.id.aRotate).performClick();
+        waitUntil(() -> a.currentPreview() != bw);
+        settle();
+        assertEquals(h0, a.currentPreview().getWidth());
+        assertEquals(w0, a.currentPreview().getHeight());
+    }
+
+    @Test public void severalPagesBecomeOnePdfThatARealReaderOpens() throws Exception {
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("p1.png", 11));
+        addPage(a, photoOfAPage("p2.png", 12));
+        addPage(a, photoOfAPage("p3.png", 13));
+        assertEquals(3, a.pageCount());
+        assertEquals("Page 3 of 3", ((TextView) a.findViewById(R.id.pageInfo)).getText().toString());
+        assertEquals(3, ((RecyclerView) a.findViewById(R.id.thumbs)).getAdapter().getItemCount());
+        // drop the middle one
+        ((RecyclerView) a.findViewById(R.id.thumbs)).getAdapter();
+        a.findViewById(R.id.aDelete).performClick();
+        settle();
+        assertEquals(2, a.pageCount());
+
+        a.findViewById(R.id.aSave).performClick();
+        waitUntil(() -> a.lastSaved != null);
+        settle();
+        File pdf = a.lastSaved;
+        assertNotNull(pdf);
+        assertEquals(new File(storage, "Documents/FileBandit Scans").getPath(), pdf.getParent());
+        assertTrue(pdf.getName(), pdf.getName().startsWith("Scan 20") && pdf.getName().endsWith(".pdf"));
+        byte[] bytes = Files.readAllBytes(pdf.toPath());
+        assertTrue(new String(bytes, 0, 8, StandardCharsets.ISO_8859_1).startsWith("%PDF-1.4"));
+        assertTrue("two pages' worth of pictures: " + bytes.length, bytes.length > 20_000);
+        assertEquals("the scanner is empty again", 0, a.pageCount());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.emptyBox).getVisibility());
+        if (new File("/usr/bin/pdfinfo").canExecute()) {
+            Process p = new ProcessBuilder("/usr/bin/pdfinfo", pdf.getPath()).redirectErrorStream(true).start();
+            String info = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+            p.waitFor();
+            assertTrue(info, info.contains("Pages: 2"));
+        }
+        View snack = a.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_text);
+        assertNotNull(snack);
+        assertTrue(((TextView) snack).getText().toString(), ((TextView) snack).getText().toString().contains("Saved 2 pages as Scan"));
+        shotOf(a, "163_scan_saved");
+    }
+
+    @Test public void adjustingEdgesLeavingAndNeedingFileAccess() throws Exception {
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("e1.png", 21));
+        a.findViewById(R.id.aEdges).performClick();
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        CropView cv = a.findViewById(R.id.cropView);
+        DocScan.Quad q = cv.getQuad();
+        assertTrue("the editor opens on the page's current corners", Math.hypot(q.x[0] - DocScanTest.PX[0], q.y[0] - DocScanTest.PX[0] * 0 - DocScanTest.PY[0]) < 30);
+        a.findViewById(R.id.cropCancel).performClick();
+        assertEquals(View.GONE, a.findViewById(R.id.cropBox).getVisibility());
+        assertEquals("cancelling keeps the page", 1, a.pageCount());
+
+        // going back with an unsaved scan asks first
+        a.getOnBackPressedDispatcher().onBackPressed();
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        assertTrue(d.isShowing());
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();           // keep scanning
+        settle();
+        assertFalse(a.isFinishing());
+        a.getOnBackPressedDispatcher().onBackPressed();
+        settle();
+        ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertTrue(a.isFinishing());
+    }
+
+    @Test public void withoutFileAccessTheSavedPdfStaysInTheCacheAndSaysSo() throws Exception {
+        Access.testOverride = false;
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("n1.png", 31));
+        a.findViewById(R.id.aSave).performClick();
+        waitUntil(() -> a.lastSaved != null);
+        settle();
+        assertTrue(a.lastSaved.getPath().startsWith(a.getCacheDir().getPath()));
+        View snack = a.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_text);
+        assertTrue(((TextView) snack).getText().toString().contains("allow file access"));
+    }
+
+    @Test public void scanTileOnTheHomeScreenOpensTheScanner() throws Exception {
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        boolean found = false;
+        for (int r = 0; r < tools.getChildCount(); r++) {
+            android.view.ViewGroup row = (android.view.ViewGroup) tools.getChildAt(r);
+            for (int i = 0; i < row.getChildCount(); i++) {
+                View tile = row.getChildAt(i);
+                TextView label = tile.findViewById(R.id.tileLabel);
+                if (label != null && "Scan".equals(label.getText().toString())) {
+                    tile.performClick();
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found);
+        assertEquals(ScanActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    // ------------------------------------------------------------------ search inside files
+
+    private ActivityController<ContentSearchActivity> searchController;
+
+    @After
+    public void tearDownContentSearch() {
+        ContentSearchActivity.testRecognizer = null;
+        if (searchController != null) {
+            try { searchController.pause().stop().destroy(); } catch (Exception ignored) { }
+            searchController = null;
+        }
+    }
+
+    private ContentSearchActivity openContentSearch() throws Exception {
+        write("Documents/notes-meeting.txt", 20);
+        Files.write(new File(storage, "Documents/notes-meeting.txt").toPath(), "Meeting with Dr. Okafor about the lease renewal on Friday".getBytes(StandardCharsets.UTF_8));
+        File receipt = writePng("Pictures/IMG_5001.png", 0xFFEEEEEE, 300, 400);
+        File dog = writePng("Pictures/IMG_5002.png", 0xFF99BB77, 400, 300);
+        File blank = writePng("Pictures/IMG_5003.png", 0xFFFFFFFF, 200, 200);
+        ContentSearchActivity.testRecognizer = f -> {
+            if (f.getName().equals("IMG_5001.png")) return new ContentIndexer.Result("Caf\u00e9 Luna\nLatte 4.20\nTotal 12.50\nThank you", java.util.Arrays.asList("Text"));
+            if (f.getName().equals("IMG_5002.png")) return new ContentIndexer.Result("", java.util.Arrays.asList("Dog", "Grass"));
+            if (f.getName().equals("IMG_5003.png")) return new ContentIndexer.Result("", null);
+            throw new IOException("not a picture");
+        };
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        return a;
+    }
+
+    private static void typeQuery(android.app.Activity a, String q) {
+        ((EditText) a.findViewById(R.id.query)).setText(q);
+        for (int i = 0; i < 4; i++) settle();
+    }
+
+    @Test public void searchFindsWordsInPicturesTextFilesAndWhatPhotosShow() throws Exception {
+        ContentSearchActivity a = openContentSearch();
+        TextView status = a.findViewById(R.id.status);
+        assertTrue(status.getText().toString(), status.getText().toString().contains("searchable"));
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Type a word"));
+        shotOf(a, "170_search_start");
+
+        typeQuery(a, "cafe total");
+        assertEquals(java.util.Arrays.asList("IMG_5001.png"), remoteRows(a));
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.contains("Caf\u00e9 Luna"));
+        assertEquals("1 file matches", ((TextView) a.findViewById(R.id.status)).getText().toString());
+        shotOf(a, "171_search_result");
+
+        typeQuery(a, "dog");
+        assertEquals(java.util.Arrays.asList("IMG_5002.png"), remoteRows(a));
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.startsWith("Shows: Dog, Grass"));
+
+        typeQuery(a, "okafor");
+        assertEquals(java.util.Arrays.asList("notes-meeting.txt"), remoteRows(a));
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.contains("Dr. Okafor"));
+
+        typeQuery(a, "zebra");
+        assertTrue(remoteRows(a).isEmpty());
+        assertEquals("Nothing matches that.", ((TextView) a.findViewById(R.id.empty)).getText().toString());
+        typeQuery(a, "");
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Type a word"));
+    }
+
+    @Test public void tappingAResultOpensItAndHoldingShowsItsFolder() throws Exception {
+        ContentSearchActivity a = openContentSearch();
+        typeQuery(a, "latte");
+        layoutOf(a);
+        RecyclerView list = a.findViewById(R.id.list);
+        list.findViewHolderForAdapterPosition(0).itemView.performClick();
+        android.content.Intent next = shadowOf(a).getNextStartedActivity();
+        assertNotNull(next);
+        assertEquals(ViewerActivity.class.getName(), next.getComponent().getClassName());
+        assertTrue(next.getStringExtra(ViewerActivity.EXTRA_PATH).endsWith("IMG_5001.png"));
+
+        list.findViewHolderForAdapterPosition(0).itemView.performLongClick();
+        assertEquals(new File(storage, "Pictures"), Nav.dir);
+        assertTrue(a.isFinishing());
+        Nav.dir = null;
+    }
+
+    @Test public void newFilesAreReadOnTheNextVisitAndOnlyThose() throws Exception {
+        openContentSearch();
+        searchController.pause().stop().destroy();
+        final java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        ContentSearchActivity.testRecognizer = f -> {
+            calls.incrementAndGet();
+            return new ContentIndexer.Result("a brand new whiteboard", null);
+        };
+        writePng("Pictures/IMG_5004.png", 0xFF333333, 100, 100);
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        assertEquals("only the new picture was read", 1, calls.get());
+        typeQuery(a, "whiteboard");
+        assertEquals(java.util.Arrays.asList("IMG_5004.png"), remoteRows(a));
+    }
+
+    @Test public void ifPicturesCantBeReadTextFilesStillWork() throws Exception {
+        write("Documents/plain.txt", 5);
+        Files.write(new File(storage, "Documents/plain.txt").toPath(), "grocery list: oat milk".getBytes(StandardCharsets.UTF_8));
+        writePng("Pictures/IMG_6001.png", 0xFF123456, 100, 100);
+        ContentSearchActivity.testRecognizer = f -> { throw new IOException("models missing"); };
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        typeQuery(a, "oat milk");
+        assertEquals(java.util.Arrays.asList("plain.txt"), remoteRows(a));
+    }
+
+    @Test public void searchNeedsFileAccessAndHasATile() throws Exception {
+        Access.testOverride = false;
+        searchController = Robolectric.buildActivity(ContentSearchActivity.class).setup();
+        ContentSearchActivity a = searchController.get();
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.empty)).getText().toString().contains("Allow file access"));
+        Access.testOverride = true;
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        boolean found = false;
+        for (int r = 0; r < tools.getChildCount() && !found; r++) {
+            android.view.ViewGroup row = (android.view.ViewGroup) tools.getChildAt(r);
+            for (int i = 0; i < row.getChildCount(); i++) {
+                TextView label = row.getChildAt(i).findViewById(R.id.tileLabel);
+                if (label != null && "Search inside".equals(label.getText().toString())) {
+                    row.getChildAt(i).performClick();
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found);
+        assertEquals(ContentSearchActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+        View toolsView = files().getView().findViewById(R.id.toolsGrid);
+        toolsView.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        toolsView.layout(0, 0, W, toolsView.getMeasuredHeight());
+        Bitmap tb = Bitmap.createBitmap(W, toolsView.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+        tb.eraseColor(0xFFF3F5F8);
+        toolsView.draw(new Canvas(tb));
+        save(tb, "172_home_tools");
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night-xxhdpi")
+    public void version31ScreensRenderInDarkMode() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity b = openBackup();
+        shotOf(b, "180_dark_backup");
+        makePhotoLibrary();
+        SwipeCleanActivity clean = openClean();
+        shotOf(clean, "181_dark_clean_summary");
+        review(clean, 0);
+        waitUntil(() -> ((android.widget.ImageView) clean.findViewById(R.id.rImage)).getDrawable() != null);
+        settle();
+        shotOf(clean, "182_dark_clean_card");
+        ScanActivity scan = openScan();
+        shotOf(scan, "183_dark_scan_empty");
+        addPage(scan, photoOfAPage("dark1.png", 41));
+        shotOf(scan, "184_dark_scan_page");
+        ContentSearchActivity search = openContentSearch();
+        typeQuery(search, "cafe");
+        shotOf(search, "185_dark_search");
+        launch();
+        selectTab(R.id.nav_transfer);
+        FastShareApp.hub(activity).setDrive(true, storage, true);
+        FastShareApp.hub(activity).addNote("Gate code 4455");
+        settle();
+        shotScrollContent("186_dark_transfer_drive_clipboard", transfer().getView());
+    }
+
+    /** Renders one view at the phone's width, for the guide. */
+    private static void shotView(View v, String name) throws Exception {
+        v.measure(View.MeasureSpec.makeMeasureSpec(W - 64, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        v.layout(0, 0, W - 64, v.getMeasuredHeight());
+        Bitmap b = Bitmap.createBitmap(W - 64, v.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+        b.eraseColor(0xFFF3F5F8);
+        v.draw(new Canvas(b));
+        save(b, name);
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {

@@ -525,6 +525,14 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                 (Runnable) () -> startActivity(new Intent(requireContext(), AppsActivity.class))});
         toolTiles.add(new Object[]{"Network", R.drawable.ic_cloud, ContextCompat.getColor(requireContext(), R.color.kind_document),
                 (Runnable) () -> startActivity(new Intent(requireContext(), NetworkActivity.class))});
+        toolTiles.add(new Object[]{"Backup", R.drawable.ic_upload, ContextCompat.getColor(requireContext(), R.color.kind_image),
+                (Runnable) () -> startActivity(new Intent(requireContext(), BackupActivity.class))});
+        toolTiles.add(new Object[]{"Clean photos", R.drawable.ic_image, ContextCompat.getColor(requireContext(), R.color.kind_video),
+                (Runnable) () -> startActivity(new Intent(requireContext(), SwipeCleanActivity.class))});
+        toolTiles.add(new Object[]{"Scan", R.drawable.ic_doc, ContextCompat.getColor(requireContext(), R.color.kind_document),
+                (Runnable) () -> startActivity(new Intent(requireContext(), ScanActivity.class))});
+        toolTiles.add(new Object[]{"Search inside", R.drawable.ic_search, ContextCompat.getColor(requireContext(), R.color.kind_audio),
+                (Runnable) () -> startActivity(new Intent(requireContext(), ContentSearchActivity.class))});
         fillGrid(tools, toolTiles, 4);
 
         LinearLayout vols = v.findViewById(R.id.volumes);

@@ -75,6 +75,23 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".BackupActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SwipeCleanActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ScanActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ContentSearchActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".HistoryActivity"
             android:exported="false" />
         <activity

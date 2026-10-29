@@ -129,6 +129,12 @@ public final class Vault {
         return masterKey != null;
     }
 
+    /** Removes this vault and everything in it from the phone, for good. */
+    public void deleteAll() {
+        lock();
+        FileOps.delete(dir);
+    }
+
     /** Forgets the key in memory. The files stay encrypted on disk. */
     public void lock() {
         byte[] k = masterKey;
@@ -239,6 +245,23 @@ public final class Vault {
     public boolean unlock(char[] pin) throws IOException {
         long left = lockedOutFor();
         if (left > 0) throw new LockedOutException(left);
+        return attempt(pin, true, true);
+    }
+
+    /**
+     * Opens the vault if {@code pin} is right, without counting a miss when it isn't and without looking at the
+     * lockout. Used to test the decoy vault first, so a decoy PIN never counts against the real vault.
+     */
+    public boolean unlockQuietly(char[] pin) throws IOException {
+        return attempt(pin, false, true);
+    }
+
+    /** True if {@code pin} is this vault's PIN. Changes nothing: doesn't unlock, doesn't count a miss. */
+    public boolean checkPin(char[] pin) throws IOException {
+        return attempt(pin, false, false);
+    }
+
+    private boolean attempt(char[] pin, boolean count, boolean open) throws IOException {
         Properties p = readMeta();
         byte[] master;
         try {
@@ -250,13 +273,14 @@ public final class Vault {
                 Arrays.fill(kek, (byte) 0);
             }
         } catch (AEADBadTagException wrong) {
-            recordFailure();
+            if (count) recordFailure();
             return false;
         } catch (GeneralSecurityException e) {
             throw new IOException("This vault can't be opened on this phone (" + e.getMessage() + ")", e);
         }
-        clearFailures();
-        masterKey = master;
+        if (count) clearFailures();
+        if (open) masterKey = master;
+        else Arrays.fill(master, (byte) 0);
         return true;
     }
 

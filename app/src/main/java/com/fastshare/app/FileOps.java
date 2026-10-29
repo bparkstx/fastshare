@@ -266,6 +266,11 @@ public final class FileOps {
         return target;
     }
 
+    /** Copies to exactly {@code target}, which must not exist yet. Folders are copied with everything inside. */
+    public static void copyExact(File src, File target) throws IOException {
+        copyInto(src, target, null, null);
+    }
+
     private static void copyInto(File src, File target, LongConsumer onBytes, AtomicBoolean cancel) throws IOException {
         cancelCheck(cancel);
         if (src.isDirectory() && !isSymlink(src)) {

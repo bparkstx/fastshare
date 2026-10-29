@@ -38,12 +38,39 @@ leftovers (caches, thumbnails, old installers, partial downloads). Cleaning move
 Lists installed apps with their size and dates. **Back up** an app's APK to `FileBandit/Apps`, share it,
 open its system settings, or uninstall it.
 
+### Photo backup
+
+**Photo backup** (Files home) copies new photos and videos to a computer or NAS you've added under *Network locations*.
+Switch on *Back up automatically* and it runs about every six hours, on Wi-Fi only, when the battery isn't low, and only
+when your server can be reached, so it simply waits until you're home. It sorts into year and month folders, never sends a
+file twice (even after reinstalling), and resumes if it's interrupted. *Remove backed-up photos from this phone* moves what
+the server really still has to the Trash (it checks the server first).
+
+### Clean up photos
+
+**Clean photos** finds near-copies of the same scene, blurry shots, black frames and screenshots older than three months,
+then lets you swipe through them: left moves a photo to the Trash, right keeps it (and it isn't suggested again), with Undo.
+
+### Scan documents
+
+**Scan** turns a photo of a page into a straight, clean PDF: it finds the page, flattens the perspective, whitens the paper
+and darkens the ink (Clean, Gray, B&W or Raw), lets you drag the corners if it guessed wrong, and joins any number of pages
+into one PDF in `Documents/FileBandit Scans`.
+
+### Search inside files
+
+**Search inside** finds words in photos and PDFs (receipts, whiteboards, letters), in text files, and what a photo shows
+("dog", "beach", "food"). It's read on the phone with Google's on-device models, which are part of the app, so nothing is
+uploaded. The first visit reads everything once; after that only new files.
+
 ### Private vault
 
 Files you move into the vault are encrypted (AES-256-GCM). The key is protected by your PIN (PBKDF2, 210,000
 rounds) and by a key that lives in the phone's Keystore, so a copy of the vault folder is useless elsewhere.
 You can add **fingerprint unlock**. The vault locks itself 30 seconds after you leave, hides itself from screenshots
 and the app switcher, and wipes the temporary decrypted copy it makes to show a file.
+A **decoy vault** can have its own PIN: typing it opens a separate vault that looks the same, for when someone makes you
+open it. Wrong PIN tries are logged and shown to you the next time you unlock the real vault.
 **There is no "forgot PIN".** If you forget it, the files cannot be recovered.
 
 ### Network locations
@@ -77,7 +104,15 @@ Nextcloud and most home servers.
    * *Other device to Android:* on the page tap **Photos & videos** or **Files app** (on a computer you can also drag
      files onto the page). Files are saved in `Downloads/FileBandit`.
 
-New in this version:
+Also on the Transfer tab:
+
+* **Use this phone as a drive.** Switch it on and Windows Explorer, Mac Finder or a Linux file manager can open the phone's
+  files over Wi-Fi (WebDAV), no cable and no browser. Read-only by default; allow changes to copy files in. Deleting from the
+  computer goes to the phone's Trash. The address contains a long secret and stays the same after restarts.
+* **Shared clipboard.** Send a link, address or code to the other device and back, from the page or the app (or share text
+  to FileBandit from any app).
+
+New in 3.0:
 
 * **Resumable.** Uploads go up in chunks. If the Wi-Fi blips or the iPhone screen locks, the page asks the phone how
   much arrived and carries on from there. Downloads support HTTP range requests, so a browser can resume them.
@@ -103,10 +138,14 @@ New in this version:
 * NFC tap-to-send is not possible between Android and iPhone (iOS does not allow it), so the QR code replaces it.
 * FTP (without TLS) and WebDAV over http send passwords unencrypted. Use the secure types where you can.
 * Keep the app open while a transfer runs.
+* The photo search uses models bundled in the app (about 40 MB of the download). Its first pass over a big library can take
+  a few minutes. Searching words in photos works best for printed text.
+* The document scanner finds the page by contrast, so a white page on a dark surface works best. If it guesses wrong, drag
+  the four corners.
 
 ## Development
 
-`./gradlew testDebugUnitTest` runs about 240 tests:
+`./gradlew testDebugUnitTest` runs about 350 tests:
 
 * file operations, recycle bin, archives, batch rename, analyzer, vault encryption, history and connection storage
   as plain JUnit tests;
@@ -114,7 +153,8 @@ New in this version:
 * the network clients against **real servers on localhost**: Apache MINA FTP in-process, and `wsgidav` (WebDAV),
   impacket's `smbserver` (SMB) and `asyncssh` (SFTP, see `tools/sftp_test_server.py`) as separate processes. Those three
   are installed with `pip install wsgidav cheroot impacket asyncssh`; point `FB_PYENV_BIN` at the folder holding them.
-  Where they are missing those tests are skipped. CI installs them;
+  Where they are missing those tests are skipped. CI installs them, plus `litmus` (the WebDAV compliance suite, run against the
+  phone's own WebDAV server) and `poppler-utils` (which opens the scanner's PDFs);
 * every screen driven on the JVM with Robolectric, with screenshots written to `app/build/shots/`.
 
 The web page the other device sees is `app/src/main/assets/index.html`.
