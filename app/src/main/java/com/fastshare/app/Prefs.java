@@ -64,4 +64,13 @@ final class Prefs {
     void setHotspotMethod(boolean v) {
         sp.edit().putBoolean("hotspotMethod", v).apply();
     }
+
+    /** PIN the iPhone/PC page asks for, or empty when the link works on its own. */
+    String linkPin() {
+        return sp.getString("linkPin", "");
+    }
+
+    void setLinkPin(String pin) {
+        sp.edit().putString("linkPin", pin == null ? "" : pin).apply();
+    }
 }

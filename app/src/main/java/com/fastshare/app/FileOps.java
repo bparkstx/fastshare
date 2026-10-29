@@ -368,6 +368,11 @@ public final class FileOps {
         zos.flush();
     }
 
+    /** Adds a file or folder to an open zip under {@code path}. */
+    public static void addToZip(ZipOutputStream zos, File f, String path) throws IOException {
+        zipEntries(zos, f, path, new byte[256 * 1024]);
+    }
+
     private static void zipEntries(ZipOutputStream zos, File f, String path, byte[] buf) throws IOException {
         if (f.isDirectory() && !isSymlink(f)) {
             zos.putNextEntry(new ZipEntry(path + "/"));

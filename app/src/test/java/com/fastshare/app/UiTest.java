@@ -1652,6 +1652,125 @@ public class UiTest {
         assertTrue("nothing is touched until the vault is unlocked", new File(storage, "Download/notes.txt").exists());
     }
 
+    // ------------------------------------------------------------------ transfer upgrades
+
+    @Test public void pinSwitchCreatesAFourDigitPinAndCanBeChangedOrTurnedOff() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        android.widget.CompoundButton sw = v.findViewById(R.id.pinSwitch);
+        assertFalse(sw.isChecked());
+        assertEquals(View.GONE, v.findViewById(R.id.pinText).getVisibility());
+        assertEquals("", hub.linkPin());
+
+        sw.performClick();
+        settle();
+        String pin = hub.linkPin();
+        assertTrue(pin, pin.matches("\\d{4}"));
+        TextView shown = v.findViewById(R.id.pinText);
+        assertEquals(View.VISIBLE, shown.getVisibility());
+        assertEquals(pin, shown.getText().toString());
+        assertTrue(((TextView) v.findViewById(R.id.pinHelp)).getText().toString().contains("asks for this PIN"));
+        shotScrollContent("90_transfer_pin_on", v);
+
+        String old = pin;
+        for (int i = 0; i < 20 && old.equals(hub.linkPin()); i++) shown.performClick();   // a new random PIN differs (almost always)
+        assertFalse(old.equals(hub.linkPin()));
+        assertEquals(hub.linkPin(), ((TextView) v.findViewById(R.id.pinText)).getText().toString());
+
+        sw.performClick();
+        settle();
+        assertEquals("", hub.linkPin());
+        assertEquals(View.GONE, v.findViewById(R.id.pinText).getVisibility());
+        assertFalse(((android.widget.CompoundButton) v.findViewById(R.id.pinSwitch)).isChecked());
+    }
+
+    @Test public void pinIsRememberedAcrossRestarts() throws Exception {
+        launch();
+        ShareHub hub = FastShareApp.hub(activity);
+        hub.setLinkPin("7319");
+        assertEquals("7319", new Prefs(activity).linkPin());
+        ShareHub fresh = new ShareHub(activity);
+        assertEquals("7319", fresh.linkPin());
+    }
+
+    @Test public void shareLinkOpensTheAndroidShareSheetWithTheAddress() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        v.findViewById(R.id.shareBtn).performClick();
+        android.content.Intent chooser = shadowOf(activity).getNextStartedActivity();
+        assertNotNull(chooser);
+        assertEquals(android.content.Intent.ACTION_CHOOSER, chooser.getAction());
+        android.content.Intent inner = chooser.getParcelableExtra(android.content.Intent.EXTRA_INTENT);
+        assertEquals(android.content.Intent.ACTION_SEND, inner.getAction());
+        String text = inner.getStringExtra(android.content.Intent.EXTRA_TEXT);
+        assertTrue(text, text.contains("http://192.168.23.33:") && text.contains("/?t="));
+        assertFalse("the PIN is never put in the shared text", text.matches("(?s).*\\d{4}\\s*$") && FastShareApp.hub(activity).linkPin().length() > 0);
+    }
+
+    private ActivityController<HistoryActivity> historyController;
+
+    @Test public void historyScreenListsFinishedTransfersAndCanBeCleared() throws Exception {
+        launch();
+        ShareHub hub = FastShareApp.hub(activity);
+        FileServer.Transfer got = new FileServer.Transfer(1, true, "IMG_4021.HEIC", "192.168.23.40", 2_900_000);
+        got.done = 2_900_000;
+        got.nanos = 180_000_000L;
+        got.state = FileServer.State.DONE;
+        got.detail = "Downloads/FileBandit";
+        hub.onTransfer(got);
+        FileServer.Transfer sent = new FileServer.Transfer(2, false, "holiday-video.mp4", "192.168.23.40", 48_300_000);
+        sent.done = 48_300_000;
+        sent.nanos = 4_000_000_000L;
+        sent.state = FileServer.State.DONE;
+        hub.onTransfer(sent);
+        FileServer.Transfer cut = new FileServer.Transfer(3, true, "big.mov", "192.168.23.40", 900_000_000);
+        cut.done = 200_000_000;
+        cut.state = FileServer.State.FAILED;
+        cut.detail = "Paused";
+        hub.onTransfer(cut);
+        assertEquals("history is written as soon as a transfer ends", 3, hub.history().list().size());
+        // an unfinished transfer is not history
+        hub.onTransfer(new FileServer.Transfer(4, false, "still-going.zip", "192.168.23.40", 10));
+        assertEquals(3, hub.history().list().size());
+
+        selectTab(R.id.nav_transfer);
+        transfer().getView().findViewById(R.id.historyBtn).performClick();
+        assertEquals(HistoryActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+
+        historyController = Robolectric.buildActivity(HistoryActivity.class).setup();
+        HistoryActivity a = historyController.get();
+        settle();
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        assertEquals(3, ra.rows().size());
+        assertEquals("big.mov", ra.rows().get(0).title);
+        assertTrue(ra.rows().get(0).sub, ra.rows().get(0).sub.startsWith("Not finished"));
+        assertTrue(ra.rows().get(1).sub, ra.rows().get(1).sub.startsWith("Sent  ·  48.3 MB"));
+        assertTrue(ra.rows().get(2).sub, ra.rows().get(2).sub.startsWith("Received  ·  2.9 MB"));
+        assertTrue(((TextView) a.findViewById(R.id.info)).getText().toString().contains("3 transfers"));
+        shotOf(a, "91_history");
+
+        // tapping something that was received opens the folder it landed in
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileBandit").mkdirs();
+        ((RecyclerView) a.findViewById(R.id.list)).findViewHolderForAdapterPosition(2).itemView.performClick();
+        assertNotNull(Nav.dir);
+        assertEquals("FileBandit", Nav.dir.getName());
+        Nav.dir = null;
+
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(R.id.action_clear, 0);
+        settle();
+        ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertEquals(0, hub.history().list().size());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+        try { historyController.pause().stop().destroy(); } catch (Exception ignored) { }
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
