@@ -13,6 +13,7 @@ import android.os.Environment;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.RecyclerView;
@@ -101,6 +102,9 @@ public class UiTest {
         Net.testOverride = null;
         Access.testOverride = null;
         FilesFragment.resetClipboard();
+        if (storageController != null) {
+            try { storageController.pause().stop().destroy(); } catch (Exception ignored) { }
+        }
         if (viewerController != null) {
             try { viewerController.pause().stop().destroy(); } catch (Exception ignored) { }
         }
@@ -910,6 +914,149 @@ public class UiTest {
         android.content.Intent other = shadowOf(activity).getNextStartedActivity();
         assertEquals(android.content.Intent.ACTION_VIEW, other.getAction());
         assertEquals("application/vnd.android.package-archive", other.getType());
+    }
+
+    private ActivityController<StorageActivity> storageController;
+
+    private StorageActivity openStorage() {
+        storageController = Robolectric.buildActivity(StorageActivity.class).setup();
+        StorageActivity a = storageController.get();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+        return a;
+    }
+
+    private void storageTab(StorageActivity a, int index) {
+        com.google.android.material.button.MaterialButtonToggleGroup g = a.findViewById(R.id.modeGroup);
+        g.getChildAt(index).performClick();
+        settle();
+    }
+
+    private static java.util.List<String> rowTitles(StorageActivity a) {
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        java.util.List<String> out = new ArrayList<>();
+        for (RowAdapter.Row r : ra.rows()) out.add(r.title);
+        return out;
+    }
+
+    private void blob(String rel, int size, long seed) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        byte[] b = new byte[size];
+        new java.util.Random(seed).nextBytes(b);
+        java.nio.file.Files.write(f.toPath(), b);
+    }
+
+    @Test public void storageOverviewBreaksDownSpaceByTypeAndFolder() throws Exception {
+        StorageActivity a = openStorage();
+        java.util.List<String> titles = rowTitles(a);
+        assertTrue(titles.toString(), titles.contains("BY TYPE"));
+        assertTrue(titles.toString(), titles.contains("Videos"));
+        assertTrue(titles.toString(), titles.contains("BIGGEST FOLDERS"));
+        assertTrue(titles.toString(), titles.contains("Download"));
+        assertEquals(View.VISIBLE, a.findViewById(R.id.usageBar).getVisibility());
+        String info = ((TextView) a.findViewById(R.id.info)).getText().toString();
+        assertTrue(info, info.contains("files"));
+        shotOf(a, "70_storage_overview");
+
+        // tapping a type asks the Files tab to show that category
+        RecyclerView list = a.findViewById(R.id.list);
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        int videoRow = titles.indexOf("Videos");
+        list.findViewHolderForAdapterPosition(videoRow).itemView.performClick();
+        assertEquals(MediaQuery.Category.VIDEOS, Nav.category);
+        Nav.category = null;
+    }
+
+    @Test public void largeFilesAreListedBiggestFirst() throws Exception {
+        StorageActivity a = openStorage();
+        storageTab(a, 1);
+        java.util.List<String> titles = rowTitles(a);
+        assertEquals("holiday-video.mp4", titles.get(0));
+        assertTrue(titles.indexOf("photos.zip") > titles.indexOf("holiday-video.mp4"));
+        shotOf(a, "71_storage_large");
+    }
+
+    @Test public void duplicatesCanBeFoundAndTheExtraCopiesTrashed() throws Exception {
+        blob("Download/Trip/original.bin", 300_000, 5);
+        java.nio.file.Files.copy(new File(storage, "Download/Trip/original.bin").toPath(), new File(storage, "Pictures/copy1.bin").toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        java.nio.file.Files.copy(new File(storage, "Download/Trip/original.bin").toPath(), new File(storage, "Documents/copy2.bin").toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        new File(storage, "Download/Trip/original.bin").setLastModified(1_000_000_000L);
+        new File(storage, "Pictures/copy1.bin").setLastModified(2_000_000_000L);
+        new File(storage, "Documents/copy2.bin").setLastModified(3_000_000_000L);
+        blob("Music/lookalike.bin", 300_000, 6);                               // same size, different content
+
+        StorageActivity a = openStorage();
+        storageTab(a, 2);
+        waitUntil(() -> rowTitles(a).contains("original.bin"));
+        java.util.List<String> titles = rowTitles(a);
+        assertTrue(titles.toString(), titles.get(0).startsWith("3 identical copies"));
+        assertTrue(titles.toString(), titles.contains("original.bin") && titles.contains("copy1.bin") && titles.contains("copy2.bin"));
+        assertFalse("a file that only has the same size isn't a duplicate", titles.contains("lookalike.bin"));
+
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_select_extras, 0);
+        settle();
+        assertEquals("keeps the oldest, selects the other two", "2 selected  \u00b7  600 KB",
+                ((TextView) a.findViewById(R.id.bottomText)).getText().toString());
+        shotOf(a, "72_storage_duplicates");
+
+        ((View) a.findViewById(R.id.bottomButton)).performClick();
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> !new File(storage, "Pictures/copy1.bin").exists());
+        settle();
+        assertTrue("the original stays", new File(storage, "Download/Trip/original.bin").exists());
+        assertFalse(new File(storage, "Pictures/copy1.bin").exists());
+        assertFalse(new File(storage, "Documents/copy2.bin").exists());
+        assertEquals("both copies are in the recycle bin", 2, new Trash(storage).list().size());
+        assertEquals("the set disappears once only one copy is left", View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+    }
+
+    @Test public void cleanupClearsLeftoversAndKeepsNormalFiles() throws Exception {
+        blob("DCIM/.thumbnails/t1.jpg", 4000, 1);
+        blob("Download/old-installer.apk", 5000, 2);
+        blob("Download/movie.mkv.part", 6000, 3);
+        new File(storage, "Empty/inside").mkdirs();
+        StorageActivity a = openStorage();
+        storageTab(a, 3);
+        java.util.List<String> titles = rowTitles(a);
+        assertTrue(titles.toString(), titles.contains("t1.jpg") || titles.contains(".thumbnails"));
+        assertTrue(titles.toString(), titles.contains("old-installer.apk"));
+        assertTrue(titles.toString(), titles.contains("movie.mkv.part"));
+        assertFalse(titles.toString(), titles.contains("Invoice March.pdf"));
+
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_select_all, 0);
+        settle();
+        shotOf(a, "73_storage_cleanup");
+        ((View) a.findViewById(R.id.bottomButton)).performClick();
+        settle();
+        ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> !new File(storage, "Download/old-installer.apk").exists());
+        settle();
+        assertFalse(new File(storage, "DCIM/.thumbnails").exists());              // caches go for good
+        assertFalse(new File(storage, "Download/movie.mkv.part").exists());
+        java.util.List<String> trashed = new ArrayList<>();
+        for (Trash.Entry e : new Trash(storage).list()) trashed.add(e.name);
+        java.util.Collections.sort(trashed);
+        assertEquals("installers and partial files can be restored", java.util.Arrays.asList("app-release.apk", "movie.mkv.part", "old-installer.apk"), trashed);
+        assertTrue(new File(storage, "Download/Invoice March.pdf").exists());
+    }
+
+    @Test public void storageHomeTileOpensTheAnalyzer() throws Exception {
+        launch();
+        android.widget.LinearLayout tools = files().getView().findViewById(R.id.toolsGrid);
+        assertTrue(tools.getChildCount() >= 1);
+        android.view.ViewGroup row = (android.view.ViewGroup) tools.getChildAt(0);
+        assertEquals("Storage", ((TextView) row.getChildAt(0).findViewById(R.id.tileLabel)).getText().toString());
+        row.getChildAt(0).performClick();
+        assertEquals(StorageActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {

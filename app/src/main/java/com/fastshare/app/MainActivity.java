@@ -82,6 +82,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (Nav.pending()) {
+            nav.setSelectedItemId(R.id.nav_files);
+            if (files != null) files.consumeNav();
+        }
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);

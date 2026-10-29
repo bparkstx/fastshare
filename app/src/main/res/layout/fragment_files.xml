@@ -232,6 +232,20 @@
                     android:orientation="vertical" />
 
                 <TextView
+                    style="@style/FsSectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="TOOLS" />
+
+                <LinearLayout
+                    android:id="@+id/toolsGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
                     android:id="@+id/volumesTitle"
                     style="@style/FsSectionTitle"
                     android:layout_width="wrap_content"

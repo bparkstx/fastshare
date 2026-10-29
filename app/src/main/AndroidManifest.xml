@@ -53,6 +53,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".StorageActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ViewerActivity"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:exported="false" />

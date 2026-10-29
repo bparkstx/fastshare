@@ -152,7 +152,21 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     @Override
     public void onResume() {
         super.onResume();
-        if (getView() != null && !isHidden()) render();
+        if (getView() != null && !isHidden()) {
+            consumeNav();
+            render();
+        }
+    }
+
+    /** Opens whatever another screen (such as Storage) asked the Files tab to show. */
+    void consumeNav() {
+        File d = Nav.dir;
+        MediaQuery.Category c = Nav.category;
+        if (d == null && c == null) return;
+        Nav.dir = null;
+        Nav.category = null;
+        if (getView() == null) return;
+        if (c != null) openCategory(c); else openDir(d);
     }
 
     @Override
@@ -499,6 +513,13 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         catTiles.add(new Object[]{"Trash", R.drawable.ic_delete, ContextCompat.getColor(requireContext(), R.color.kind_other),
                 (Runnable) () -> startActivity(new Intent(requireContext(), TrashActivity.class))});
         fillGrid(cats, catTiles, 3);
+
+        LinearLayout tools = v.findViewById(R.id.toolsGrid);
+        tools.removeAllViews();
+        List<Object[]> toolTiles = new ArrayList<>();
+        toolTiles.add(new Object[]{"Storage", R.drawable.ic_storage, ContextCompat.getColor(requireContext(), R.color.kind_archive),
+                (Runnable) () -> startActivity(new Intent(requireContext(), StorageActivity.class))});
+        fillGrid(tools, toolTiles, 4);
 
         LinearLayout vols = v.findViewById(R.id.volumes);
         vols.removeAllViews();
