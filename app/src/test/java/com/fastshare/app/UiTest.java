@@ -2228,6 +2228,84 @@ public class UiTest {
         try { v.pause().stop().destroy(); } catch (Exception ignored) { }
     }
 
+    // ------------------------------------------------------------------ shared clipboard
+
+    /** Posts text to the phone's own server the way the other device's page does. */
+    private static void postNoteFromOtherDevice(ShareHub hub, String text) throws Exception {
+        java.net.URL u = new java.net.URL(hub.currentUrl().replaceFirst("//[^:/]+", "//127.0.0.1").replaceFirst("/\\?t=", "/api/notes?t="));
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+        c.setRequestMethod("POST");
+        c.setDoOutput(true);
+        byte[] b = text.getBytes(StandardCharsets.UTF_8);
+        c.setFixedLengthStreamingMode(b.length);
+        try (java.io.OutputStream os = c.getOutputStream()) { os.write(b); }
+        assertEquals(200, c.getResponseCode());
+        c.getInputStream().close();
+    }
+
+    @Test public void sharedClipboardSendsAndReceivesText() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+
+        ((android.widget.EditText) v.findViewById(R.id.noteInput)).setText("https://example.com/wifi-password");
+        v.findViewById(R.id.noteSend).performClick();
+        settle();
+        assertEquals(1, hub.notes().size());
+        assertTrue(hub.notes().get(0).fromPhone);
+        assertEquals("the box is cleared after sending", "", ((android.widget.EditText) v.findViewById(R.id.noteInput)).getText().toString());
+
+        postNoteFromOtherDevice(hub, "Gate code 4455");
+        waitUntil(() -> ((android.widget.LinearLayout) v.findViewById(R.id.noteList)).getChildCount() == 2);
+        settle();
+        android.widget.LinearLayout list = v.findViewById(R.id.noteList);
+        assertEquals(2, list.getChildCount());
+        assertEquals("Gate code 4455", ((TextView) list.getChildAt(0).findViewById(R.id.nText)).getText().toString());
+        String sub = ((TextView) list.getChildAt(0).findViewById(R.id.nSub)).getText().toString();
+        assertTrue(sub, sub.startsWith("From the other device") && sub.endsWith("tap to copy"));
+        assertTrue(((TextView) list.getChildAt(1).findViewById(R.id.nSub)).getText().toString().startsWith("You sent this"));
+        shotScrollContent("120_transfer_clipboard", v);
+
+        // tapping a note copies it
+        list.getChildAt(0).performClick();
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        assertEquals("Gate code 4455", cm.getPrimaryClip().getItemAt(0).getText().toString());
+
+        v.findViewById(R.id.notesClear).performClick();
+        settle();
+        assertEquals(0, hub.notes().size());
+        assertEquals(0, ((android.widget.LinearLayout) v.findViewById(R.id.noteList)).getChildCount());
+    }
+
+    @Test public void pasteAndSendUsesTheClipboard() throws Exception {
+        launch();
+        selectTab(R.id.nav_transfer);
+        View v = transfer().getView();
+        ShareHub hub = FastShareApp.hub(activity);
+        waitUntil(hub::isRunning);
+        android.content.ClipboardManager cm = (android.content.ClipboardManager) activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("x", "copied elsewhere"));
+        v.findViewById(R.id.notePaste).performClick();
+        settle();
+        assertEquals("copied elsewhere", hub.notes().get(0).text);
+        v.findViewById(R.id.noteSend).performClick();       // empty box: nothing is added
+        assertEquals(1, hub.notes().size());
+    }
+
+    @Test public void textSharedFromAnotherAppLandsInTheClipboardCard() throws Exception {
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_SEND)
+                .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, "https://maps.example/place/42");
+        controller = Robolectric.buildActivity(MainActivity.class, i).setup();
+        activity = controller.get();
+        settle();
+        ShareHub hub = FastShareApp.hub(activity);
+        assertEquals(1, hub.notes().size());
+        assertEquals("https://maps.example/place/42", hub.notes().get(0).text);
+        assertTrue(transfer().isVisible());
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);

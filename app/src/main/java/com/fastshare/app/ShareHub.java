@@ -212,6 +212,21 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
     public List<FileServer.Transfer> transfers() { return transfers; }
     public History history() { return history; }
 
+    // ------------------------------------------------------------------ shared clipboard
+
+    public FileServer.Note addNote(String text) {
+        return server == null ? null : server.addNote(text, true);
+    }
+
+    public List<FileServer.Note> notes() {
+        return server == null ? new ArrayList<FileServer.Note>() : server.getNotes();
+    }
+
+    public void clearNotes() {
+        if (server != null) server.clearNotes();
+    }
+
+
     /** The PIN devices must enter after opening the link, or empty when there isn't one. */
     public String linkPin() { return prefs.linkPin(); }
 
@@ -342,6 +357,11 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
 
     @Override
     public void onSharedChanged() {
+        changed();
+    }
+
+    @Override
+    public void onNotesChanged() {
         changed();
     }
 

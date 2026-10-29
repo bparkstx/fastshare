@@ -62,6 +62,8 @@ public class FileServer {
         void onSharedChanged();
         /** A transfer started, progressed (throttled) or finished. Read the fields of {@code t}. */
         void onTransfer(Transfer t);
+        /** A shared note was added or the notes were cleared. */
+        default void onNotesChanged() { }
     }
 
     /** An item the phone offers for download. */
@@ -78,6 +80,21 @@ public class FileServer {
             this.name = name;
             this.size = size;
             this.dir = dir;
+        }
+    }
+
+    /** A line of text passed between the phone and the other device (a link, an address, a code). */
+    public static final class Note {
+        public final int id;
+        public final boolean fromPhone;
+        public final String text;
+        public final long time;
+
+        Note(int id, boolean fromPhone, String text, long time) {
+            this.id = id;
+            this.fromPhone = fromPhone;
+            this.text = text;
+            this.time = time;
         }
     }
 
@@ -198,6 +215,71 @@ public class FileServer {
         ss.setReuseAddress(true);
         ss.setReceiveBufferSize(BUFFER); // must be set before bind for TCP window scaling
         return ss;
+    }
+
+    // ------------------------------------------------------------------ shared notes
+
+    static final int NOTE_MAX_CHARS = 20_000;
+    static final int NOTE_KEEP = 50;
+    private final List<Note> notes = new CopyOnWriteArrayList<>();
+
+    /** Adds a note (newest are shown first). Overlong text is cut. Returns null for empty text. */
+    public Note addNote(String text, boolean fromPhone) {
+        if (text == null) return null;
+        String t = text.length() > NOTE_MAX_CHARS ? text.substring(0, NOTE_MAX_CHARS) : text;
+        if (t.trim().isEmpty()) return null;
+        Note n = new Note(idCounter.incrementAndGet(), fromPhone, t, System.currentTimeMillis());
+        notes.add(0, n);
+        while (notes.size() > NOTE_KEEP) notes.remove(notes.size() - 1);
+        listener.onNotesChanged();
+        return n;
+    }
+
+    public List<Note> getNotes() {
+        return new java.util.ArrayList<>(notes);
+    }
+
+    public void removeNote(int id) {
+        for (Note n : notes) if (n.id == id) notes.remove(n);
+        listener.onNotesChanged();
+    }
+
+    public void clearNotes() {
+        notes.clear();
+        listener.onNotesChanged();
+    }
+
+    private String notesJson() {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (Note n : notes) {
+            if (!first) sb.append(',');
+            first = false;
+            sb.append("{\"id\":").append(n.id).append(",\"from\":\"").append(n.fromPhone ? "phone" : "other")
+                    .append("\",\"text\":").append(jsonStr(n.text)).append(",\"time\":").append(n.time).append('}');
+        }
+        return sb.append(']').toString();
+    }
+
+    private void receiveNote(InputStream in, OutputStream out, Map<String, String> headers) throws IOException {
+        long len;
+        try {
+            len = Long.parseLong(headers.get("content-length") == null ? "-1" : headers.get("content-length"));
+        } catch (NumberFormatException e) {
+            len = -1;
+        }
+        if (len < 0) { sendText(out, 411, "Length Required", "application/json", "{\"ok\":false}"); return; }
+        if (len > 4L * NOTE_MAX_CHARS) { sendText(out, 413, "Too Large", "application/json", "{\"ok\":false,\"error\":\"too long\"}"); return; }
+        byte[] body = new byte[(int) len];
+        int got = 0;
+        while (got < body.length) {
+            int n = in.read(body, got, body.length - got);
+            if (n < 0) throw new EOFException();
+            got += n;
+        }
+        Note n = addNote(new String(body, StandardCharsets.UTF_8), false);
+        sendText(out, n == null ? 400 : 200, n == null ? "Bad Request" : "OK", "application/json; charset=utf-8",
+                n == null ? "{\"ok\":false,\"error\":\"empty\"}" : "{\"ok\":true,\"id\":" + n.id + "}");
     }
 
     // ------------------------------------------------------------------ PIN
@@ -409,6 +491,13 @@ public class FileServer {
             } else if ("GET".equals(method) && path.equals("/api/info")) {
                 sendText(out, 200, "OK", "application/json; charset=utf-8",
                         "{\"device\":" + jsonStr(backend.deviceName()) + ",\"ok\":true}");
+            } else if ("GET".equals(method) && path.equals("/api/notes")) {
+                sendText(out, 200, "OK", "application/json; charset=utf-8", notesJson());
+            } else if ("POST".equals(method) && path.equals("/api/notes")) {
+                receiveNote(in, out, headers);
+            } else if ("POST".equals(method) && path.equals("/api/notes/clear")) {
+                clearNotes();
+                sendText(out, 200, "OK", "application/json", "{\"ok\":true}");
             } else if ("GET".equals(method) && path.equals("/api/files")) {
                 sendText(out, 200, "OK", "application/json; charset=utf-8", filesJson());
             } else if (("GET".equals(method) || "HEAD".equals(method)) && path.equals("/dl/all")) {
