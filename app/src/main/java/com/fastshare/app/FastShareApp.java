@@ -10,6 +10,9 @@ public class FastShareApp extends Application {
     public void onCreate() {
         super.onCreate();
         hub = new ShareHub(this);
+        try {
+            BackupWorker.schedule(this);
+        } catch (Exception ignored) { }      // never let scheduling stop the app from opening
     }
 
     static ShareHub hub(Context c) {

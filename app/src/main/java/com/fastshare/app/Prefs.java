@@ -116,4 +116,34 @@ final class Prefs {
     void setLinkPin(String pin) {
         sp.edit().putString("linkPin", pin == null ? "" : pin).apply();
     }
+
+    // ------------------------------------------------------------------ photo backup
+
+    boolean backupOn() { return sp.getBoolean("backupOn", false); }
+    void setBackupOn(boolean v) { sp.edit().putBoolean("backupOn", v).apply(); }
+
+    String backupConnection() { return sp.getString("backupConn", ""); }
+    void setBackupConnection(String id) { sp.edit().putString("backupConn", id == null ? "" : id).apply(); }
+
+    String backupDest() { return sp.getString("backupDest", ""); }
+    void setBackupDest(String v) { sp.edit().putString("backupDest", v == null ? "" : v).apply(); }
+
+    /** Folder names under internal storage that are backed up. */
+    java.util.Set<String> backupFolders() {
+        return new java.util.LinkedHashSet<>(sp.getStringSet("backupFolders", new java.util.LinkedHashSet<>(java.util.Arrays.asList("DCIM"))));
+    }
+    void setBackupFolders(java.util.Set<String> v) { sp.edit().putStringSet("backupFolders", new java.util.HashSet<>(v)).apply(); }
+
+    boolean backupByDate() { return sp.getBoolean("backupByDate", true); }
+    void setBackupByDate(boolean v) { sp.edit().putBoolean("backupByDate", v).apply(); }
+
+    boolean backupVideos() { return sp.getBoolean("backupVideos", true); }
+    void setBackupVideos(boolean v) { sp.edit().putBoolean("backupVideos", v).apply(); }
+
+    boolean backupCharging() { return sp.getBoolean("backupCharging", false); }
+    void setBackupCharging(boolean v) { sp.edit().putBoolean("backupCharging", v).apply(); }
+
+    String backupLast() { return sp.getString("backupLast", ""); }
+    long backupLastTime() { return sp.getLong("backupLastTime", 0); }
+    void setBackupLast(String text, long time) { sp.edit().putString("backupLast", text).putLong("backupLastTime", time).apply(); }
 }

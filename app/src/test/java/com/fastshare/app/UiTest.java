@@ -13,6 +13,7 @@ import android.os.Environment;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -2412,6 +2413,198 @@ public class UiTest {
         assertEquals(View.GONE, v.findViewById(R.id.driveBox).getVisibility());
         assertFalse(((android.widget.CompoundButton) v.findViewById(R.id.driveSwitch)).isChecked());
         assertFalse(FastShareApp.hub(activity).driveEnabled());
+    }
+
+    // ------------------------------------------------------------------ photo backup
+
+    private ActivityController<BackupActivity> backupController;
+    private MemoryRemote backupServer;
+
+    private void photoOnPhone(String rel, int size, long modified) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        byte[] b = new byte[size];
+        new java.util.Random(rel.hashCode()).nextBytes(b);
+        Files.write(f.toPath(), b);
+        assertTrue(f.setLastModified(modified));
+    }
+
+    private BackupActivity openBackup() {
+        backupController = Robolectric.buildActivity(BackupActivity.class).setup();
+        BackupActivity a = backupController.get();
+        settle();
+        return a;
+    }
+
+    private Connection backupSetup() throws Exception {
+        backupServer = new MemoryRemote();
+        RemoteSession.reset();
+        Remotes.testOpener = c -> {
+            if (c.host.equals("down.local")) throw new IOException(Remotes.friendly(new java.net.ConnectException("refused"), c));
+            return backupServer;
+        };
+        long old = new java.util.GregorianCalendar(2026, java.util.Calendar.MARCH, 5, 10, 0).getTimeInMillis();
+        photoOnPhone("DCIM/Camera/IMG_A.jpg", 3000, old);
+        photoOnPhone("DCIM/Camera/IMG_B.mp4", 5000, old + 86_400_000L * 40);
+        photoOnPhone("Pictures/Screenshots/shot.png", 2000, old);
+        new File(storage, "DCIM/Camera/IMG_20260101_101010.jpg").setLastModified(old);   // from the shared sample set
+        return saveConnection("Home NAS", "nas.local", Connection.Type.SFTP);
+    }
+
+    @After
+    public void tearDownBackup() {
+        if (backupController != null) {
+            try { backupController.pause().stop().destroy(); } catch (Exception ignored) { }
+            backupController = null;
+        }
+    }
+
+    @Test public void backupScreenInvitesYouToAddAServerFirst() throws Exception {
+        RemoteSession.reset();
+        BackupActivity a = openBackup();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.bNoConn).getVisibility());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.bAddConn).getVisibility());
+        assertEquals("Nothing has been backed up yet.", ((TextView) a.findViewById(R.id.bStatus)).getText().toString());
+        assertFalse(a.findViewById(R.id.bRunNow).isEnabled());
+        a.findViewById(R.id.bAuto).performClick();                    // can't switch on without a destination
+        settle();
+        assertFalse(((android.widget.CompoundButton) a.findViewById(R.id.bAuto)).isChecked());
+        assertFalse(new Prefs(a).backupOn());
+        shotOf(a, "130_backup_empty");
+    }
+
+    @Test public void backUpNowSendsNewPhotosIntoYearAndMonthFolders() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        assertTrue(a.findViewById(R.id.bRunNow).isEnabled());
+        assertEquals("/FileBandit Backup/" + android.os.Build.MODEL.trim(), ((EditText) a.findViewById(R.id.bDest)).getText().toString().replace("Android", android.os.Build.MODEL.trim()));
+        ((EditText) a.findViewById(R.id.bDest)).setText("/Phone backup");
+        settle();
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && !backupServer.allFiles().isEmpty());
+        settle();
+        java.util.List<String> sent = backupServer.allFiles();
+        assertTrue(sent.toString(), sent.contains("/Phone backup/2026/03/IMG_A.jpg"));
+        assertTrue(sent.toString(), sent.contains("/Phone backup/2026/04/IMG_B.mp4"));
+        assertFalse("Pictures isn't selected, so screenshots stay", sent.toString().contains("shot.png"));
+        assertEquals(3000, backupServer.files.get("/Phone backup/2026/03/IMG_A.jpg").length);
+        String status = ((TextView) a.findViewById(R.id.bStatus)).getText().toString();
+        assertTrue(status, status.startsWith("Last backup just now: Sent "));
+        shotOf(a, "131_backup_done");
+
+        // a second run has nothing new
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning());
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.bStatus)).getText().toString(), ((TextView) a.findViewById(R.id.bStatus)).getText().toString().endsWith("Everything was already backed up"));
+    }
+
+    @Test public void folderChoicesAndOptionsAreSavedAndUsed() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        ((android.widget.CompoundButton) a.findViewById(R.id.bPics)).setChecked(true);
+        ((android.widget.CompoundButton) a.findViewById(R.id.bVideos)).setChecked(false);
+        ((android.widget.CompoundButton) a.findViewById(R.id.bByDate)).setChecked(false);
+        ((EditText) a.findViewById(R.id.bDest)).setText("Flat");
+        settle();
+        Prefs p = new Prefs(a);
+        assertTrue(p.backupFolders().containsAll(java.util.Arrays.asList("DCIM", "Pictures")));
+        assertFalse(p.backupVideos());
+        assertFalse(p.backupByDate());
+        assertEquals("Flat", p.backupDest());
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && !backupServer.allFiles().isEmpty());
+        settle();
+        java.util.List<String> sent = backupServer.allFiles();
+        assertTrue(sent.toString(), sent.contains("/Flat/IMG_A.jpg") && sent.contains("/Flat/shot.png"));
+        assertFalse("videos are off", sent.toString().contains(".mp4"));
+    }
+
+    @Test public void autoBackupSchedulesWifiOnlyWorkAndSwitchingOffCancelsIt() throws Exception {
+        Connection c = backupSetup();
+        androidx.work.testing.WorkManagerTestInitHelper.initializeTestWorkManager(RuntimeEnvironment.getApplication());
+        BackupActivity a = openBackup();
+        a.findViewById(R.id.bAuto).performClick();
+        settle();
+        assertTrue(new Prefs(a).backupOn());
+        assertEquals(c.id, new Prefs(a).backupConnection());
+        java.util.List<androidx.work.WorkInfo> infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertEquals(1, infos.size());
+        assertEquals(androidx.work.WorkInfo.State.ENQUEUED, infos.get(0).getState());
+        assertEquals(androidx.work.NetworkType.UNMETERED, infos.get(0).getConstraints().getRequiredNetworkType());
+        assertTrue(infos.get(0).getConstraints().requiresBatteryNotLow());
+        assertFalse(infos.get(0).getConstraints().requiresCharging());
+
+        ((android.widget.CompoundButton) a.findViewById(R.id.bCharging)).setChecked(true);
+        settle();
+        infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertTrue("only while charging is passed on", infos.get(0).getConstraints().requiresCharging());
+
+        a.findViewById(R.id.bAuto).performClick();
+        settle();
+        infos = androidx.work.WorkManager.getInstance(a).getWorkInfosForUniqueWork(BackupWorker.UNIQUE_NAME).get();
+        assertEquals(androidx.work.WorkInfo.State.CANCELLED, infos.get(0).getState());
+    }
+
+    @Test public void theScheduledWorkerBacksUpAndRetriesWhenTheServerIsOutOfReach() throws Exception {
+        Connection c = backupSetup();
+        Prefs p = new Prefs(RuntimeEnvironment.getApplication());
+        p.setBackupConnection(c.id);
+        p.setBackupDest("/Auto");
+        p.setBackupOn(false);
+        androidx.work.ListenableWorker w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals("switched off: does nothing", androidx.work.ListenableWorker.Result.success(), w.startWork().get());
+        assertTrue(backupServer.allFiles().isEmpty());
+
+        p.setBackupOn(true);
+        w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals(androidx.work.ListenableWorker.Result.success(), w.startWork().get());
+        assertTrue(backupServer.allFiles().toString(), backupServer.allFiles().contains("/Auto/2026/03/IMG_A.jpg"));
+
+        // away from home: the server can't be reached, so ask WorkManager to try again later
+        Connection away = saveConnection("Away", "down.local", Connection.Type.SFTP);
+        p.setBackupConnection(away.id);
+        w = androidx.work.testing.TestListenableWorkerBuilder.from(RuntimeEnvironment.getApplication(), BackupWorker.class).build();
+        assertEquals(androidx.work.ListenableWorker.Result.retry(), w.startWork().get());
+        assertTrue(p.backupLast(), p.backupLast().startsWith("Couldn't connect: Can't reach down.local"));
+    }
+
+    @Test public void freeingSpaceMovesOnlyVerifiedBackedUpPhotosToTheTrash() throws Exception {
+        Connection c = backupSetup();
+        BackupActivity a = openBackup();
+        ((EditText) a.findViewById(R.id.bDest)).setText("/B");
+        settle();
+        a.findViewById(R.id.bRunNow).performClick();
+        waitUntil(() -> !BackupJob.isRunning() && backupServer.allFiles().size() >= 3);
+        settle();
+        // one of the backed-up files was deleted from the server by hand
+        backupServer.files.remove("/B/2026/04/IMG_B.mp4");
+
+        a.findViewById(R.id.bFree).performClick();
+        waitUntil(() -> org.robolectric.shadows.ShadowDialog.getLatestDialog() instanceof androidx.appcompat.app.AlertDialog
+                && ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).isShowing());
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        shotDialog(d, "132_backup_free_space");
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> !new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        settle();
+        assertFalse(new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        assertTrue("not on the server any more, so it stays on the phone", new File(storage, "DCIM/Camera/IMG_B.mp4").exists());
+        assertTrue("Pictures wasn't part of the backup", new File(storage, "Pictures/Screenshots/shot.png").exists());
+        java.util.List<String> trashed = new ArrayList<>();
+        for (Trash.Entry e : new Trash(storage).list()) trashed.add(e.name);
+        assertTrue(trashed.toString(), trashed.contains("IMG_A.jpg") && !trashed.contains("IMG_B.mp4"));
+    }
+
+    @Test public void backupTileOnTheHomeScreenOpensTheScreen() throws Exception {
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        android.view.ViewGroup row2 = (android.view.ViewGroup) tools.getChildAt(1);
+        assertEquals("Backup", ((TextView) row2.getChildAt(0).findViewById(R.id.tileLabel)).getText().toString());
+        row2.getChildAt(0).performClick();
+        assertEquals(BackupActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {
