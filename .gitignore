@@ -3,3 +3,6 @@ build/
 local.properties
 .idea/
 *.iml
+
+# written by the litmus WebDAV test suite
+debug.log

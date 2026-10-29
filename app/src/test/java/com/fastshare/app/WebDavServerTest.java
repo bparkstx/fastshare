@@ -185,6 +185,27 @@ public class WebDavServerTest extends RemoteContractTest {
         }
     }
 
+    @Test public void copyingAFolderWithDepthZeroCopiesOnlyTheFolder() throws Exception {
+        File dir = new File(root, "Album");
+        dir.mkdir();
+        Files.write(new File(dir, "a.jpg").toPath(), "x".getBytes(StandardCharsets.UTF_8));
+        new File(dir, "inner").mkdir();
+        try (Response r = call("COPY", dav("/Album"), null, "Destination", dav("/Shallow"), "Depth", "0")) {
+            assertEquals(201, r.code());
+        }
+        assertTrue(new File(root, "Shallow").isDirectory());
+        assertEquals("nothing inside was copied", 0, new File(root, "Shallow").list().length);
+        try (Response r = call("COPY", dav("/Album"), null, "Destination", dav("/Deep"), "Depth", "infinity")) {
+            assertEquals(201, r.code());
+        }
+        assertTrue(new File(root, "Deep/a.jpg").isFile());
+        assertTrue(new File(root, "Deep/inner").isDirectory());
+        try (Response r = call("COPY", dav("/Album"), null, "Destination", dav("/Default"))) {
+            assertEquals(201, r.code());
+        }
+        assertTrue("no Depth header means everything", new File(root, "Default/a.jpg").isFile());
+    }
+
     @Test public void pathsCannotEscapeTheSharedFolder() throws Exception {
         File outside = tmp.newFile("secret.txt");
         Files.write(outside.toPath(), "top secret".getBytes(StandardCharsets.UTF_8));
@@ -309,6 +330,7 @@ public class WebDavServerTest extends RemoteContractTest {
         Assume.assumeNotNull("litmus isn't installed (apt install litmus)", litmus);
         ProcessBuilder pb = new ProcessBuilder(litmus.getPath(), "http://127.0.0.1:" + port + "/d/" + TOKEN + "/");
         pb.environment().put("TESTS", "basic copymove http");
+        pb.directory(tmp.newFolder("litmus-run"));          // litmus writes a debug.log into its working folder
         pb.redirectErrorStream(true);
         Process p = pb.start();
         String out = new String(readAll(p.getInputStream()), StandardCharsets.UTF_8);

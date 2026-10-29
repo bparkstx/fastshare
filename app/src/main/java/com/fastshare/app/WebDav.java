@@ -477,6 +477,8 @@ public final class WebDav {
                     FileOps.copyExact(src, target);
                     deleter.delete(src);
                 }
+            } else if (src.isDirectory() && "0".equals(headers.get("depth") == null ? "" : headers.get("depth").trim())) {
+                if (!target.mkdir()) throw new IOException("Can't create " + target.getName());     // Depth: 0 copies the folder, not what's in it
             } else {
                 FileOps.copyExact(src, target);
             }
