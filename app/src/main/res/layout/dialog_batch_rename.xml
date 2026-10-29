@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="24dp">
+
+        <Spinner
+            android:id="@+id/brMode"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <LinearLayout
+            android:id="@+id/brNumbering"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <EditText
+                android:id="@+id/brBase"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Name, for example Holiday_"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/brStart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:hint="Start at"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:singleLine="true"
+                    android:text="1" />
+
+                <EditText
+                    android:id="@+id/brDigits"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Digits"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:singleLine="true"
+                    android:text="2" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/brFind"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/brFindText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Find"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/brReplaceText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Replace with (can be empty)"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <CheckBox
+                android:id="@+id/brMatchCase"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Match upper/lower case" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/brPrefix"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/brPrefixText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Add before the name"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+
+            <EditText
+                android:id="@+id/brSuffixText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Add after the name"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true" />
+        </LinearLayout>
+
+        <RadioGroup
+            android:id="@+id/brCase"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <RadioButton
+                android:id="@+id/brCaseLower"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="all lowercase" />
+
+            <RadioButton
+                android:id="@+id/brCaseUpper"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ALL UPPERCASE" />
+
+            <RadioButton
+                android:id="@+id/brCaseTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Each Word Capitalised" />
+
+            <RadioButton
+                android:id="@+id/brCaseSentence"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Only the first letter" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/brDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/brDatePattern"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Date pattern"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:singleLine="true"
+                android:text="yyyyMMdd_HHmmss" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="yyyy year, MM month, dd day, HH hour, mm minute, ss second. The file's modified date is used."
+                android:textColor="@color/fs_muted"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <CheckBox
+            android:id="@+id/brKeepExt"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Keep file extensions (.jpg, .pdf)" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="PREVIEW"
+            android:textColor="@color/fs_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/brPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp"
+            android:textColor="@color/fs_text"
+            android:textSize="13sp" />
+    </LinearLayout>
+</ScrollView>

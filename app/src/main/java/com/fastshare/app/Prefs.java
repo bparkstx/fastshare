@@ -27,6 +27,14 @@ final class Prefs {
         sp.edit().putString("sort", s.name()).putBoolean("asc", asc).apply();
     }
 
+    boolean grid() {
+        return sp.getBoolean("grid", false);
+    }
+
+    void setGrid(boolean v) {
+        sp.edit().putBoolean("grid", v).apply();
+    }
+
     boolean showHidden() {
         return sp.getBoolean("hidden", false);
     }

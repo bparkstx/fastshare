@@ -80,6 +80,7 @@ public class UiTest {
     @Before
     public void setUp() throws Exception {
         Access.testOverride = true;
+        FilesFragment.resetClipboard();
         storage = Environment.getExternalStorageDirectory();
         storage.mkdirs();
         ShadowStatFs.registerStats(storage, 62_500_000, 31_000_000, 31_000_000);   // 256 GB, about half used
@@ -98,6 +99,7 @@ public class UiTest {
     public void tearDown() {
         Net.testOverride = null;
         Access.testOverride = null;
+        FilesFragment.resetClipboard();
         if (controller != null) {
             try { controller.pause().stop().destroy(); } catch (Exception ignored) { }
         }
@@ -278,7 +280,7 @@ public class UiTest {
         assertEquals(View.VISIBLE, v.findViewById(R.id.home).getVisibility());
         assertEquals(View.GONE, v.findViewById(R.id.permScreen).getVisibility());
         android.widget.TextView sub = v.findViewById(R.id.storageSub);
-        assertTrue(sub.getText().toString(), sub.getText().toString().contains("used of"));
+        assertTrue(sub.getText().toString(), sub.getText().toString().contains("free of"));
         android.widget.LinearLayout quick = v.findViewById(R.id.quickGrid);
         assertTrue("quick access tiles", quick.getChildCount() >= 2);
         android.widget.LinearLayout cats = v.findViewById(R.id.catGrid);
@@ -338,7 +340,7 @@ public class UiTest {
 
         clickRow("Invoice March.pdf");                       // while selecting, a tap toggles
         assertEquals("2", tb.getTitle().toString());
-        assertFalse(tb.getMenu().findItem(R.id.action_rename).isVisible());
+        assertEquals("rename becomes a batch rename", "Rename 2 files...", tb.getMenu().findItem(R.id.action_rename).getTitle().toString());
         shot("04_selection");
 
         assertTrue(files().handleBack());                    // Back clears the selection first
@@ -616,6 +618,113 @@ public class UiTest {
         launch();
         assertEquals(java.util.Collections.singletonList(new File(storage, "Download/notes.txt").getPath()),
                 new Prefs(activity).favorites());
+    }
+
+    @Test public void batchRenameShowsAPreviewRenamesAndUndoes() throws Exception {
+        write("Download/batch/IMG_10.jpg", 100);
+        write("Download/batch/IMG_2.jpg", 100);
+        write("Download/batch/IMG_3.jpg", 100);
+        launch();
+        files().openDir(new File(storage, "Download/batch"));
+        settle();
+        longClickRow("IMG_10.jpg");
+        clickRow("IMG_2.jpg");
+        clickRow("IMG_3.jpg");
+        MaterialToolbar tb = files().getView().findViewById(R.id.toolbar);
+        assertEquals("Rename 3 files...", tb.getMenu().findItem(R.id.action_rename).getTitle().toString());
+        menu(R.id.action_rename);
+
+        androidx.appcompat.app.AlertDialog dlg = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        View root = dlg.getWindow().getDecorView();
+        android.widget.TextView preview = root.findViewById(R.id.brPreview);
+        assertEquals("nothing typed yet, but numbering with no name is a real change", true, preview.getText().length() > 0);
+        ((android.widget.EditText) root.findViewById(R.id.brBase)).setText("Trip_");
+        ((android.widget.EditText) root.findViewById(R.id.brDigits)).setText("3");
+        shadowOf(Looper.getMainLooper()).idle();
+        String text = preview.getText().toString();
+        assertTrue(text, text.contains("IMG_2.jpg  \u2192  Trip_001.jpg"));
+        assertTrue(text, text.contains("IMG_10.jpg  \u2192  Trip_003.jpg"));
+        View ok = dlg.getButton(AlertDialog.BUTTON_POSITIVE);
+        assertTrue(ok.isEnabled());
+        androidx.appcompat.app.AlertDialog shown = dlg;
+        Bitmap b = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
+        b.eraseColor(0xFFFFFFFF);
+        View decor = shown.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.AT_MOST));
+        decor.layout(0, 0, decor.getMeasuredWidth(), decor.getMeasuredHeight());
+        Bitmap d = Bitmap.createBitmap(decor.getMeasuredWidth(), decor.getMeasuredHeight(), Bitmap.Config.ARGB_8888);
+        d.eraseColor(0xFFFFFFFF);
+        decor.draw(new Canvas(d));
+        save(d, "50_batch_rename_dialog");
+
+        ok.performClick();
+        settle();
+        assertTrue(new File(storage, "Download/batch/Trip_001.jpg").exists());
+        assertTrue(new File(storage, "Download/batch/Trip_002.jpg").exists());
+        assertTrue(new File(storage, "Download/batch/Trip_003.jpg").exists());
+        assertFalse(new File(storage, "Download/batch/IMG_2.jpg").exists());
+        clickSnackbarAction();
+        assertTrue("undo restores the original names", new File(storage, "Download/batch/IMG_2.jpg").exists());
+        assertTrue(new File(storage, "Download/batch/IMG_10.jpg").exists());
+        assertFalse(new File(storage, "Download/batch/Trip_001.jpg").exists());
+    }
+
+    @Test public void batchRenameBlocksClashes() throws Exception {
+        write("Download/clash/a.txt", 5);
+        write("Download/clash/b.txt", 5);
+        write("Download/clash/keep.txt", 5);
+        launch();
+        files().openDir(new File(storage, "Download/clash"));
+        settle();
+        longClickRow("a.txt");
+        clickRow("b.txt");
+        menu(R.id.action_rename);
+        androidx.appcompat.app.AlertDialog dlg = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        View root = dlg.getWindow().getDecorView();
+        android.widget.Spinner mode = root.findViewById(R.id.brMode);
+        mode.setSelection(1);                                             // find and replace
+        shadowOf(Looper.getMainLooper()).idle();
+        ((android.widget.EditText) root.findViewById(R.id.brFindText)).setText("a");
+        ((android.widget.EditText) root.findViewById(R.id.brReplaceText)).setText("keep");
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse("renaming a.txt to keep.txt would overwrite", dlg.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        assertTrue(((android.widget.TextView) root.findViewById(R.id.brPreview)).getText().toString().contains("already exists"));
+    }
+
+    @Test public void invertAndSelectByType() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_invert);
+        MaterialToolbar tb = files().getView().findViewById(R.id.toolbar);
+        int total = ((FileAdapter) list().getAdapter()).items().size();
+        assertEquals("everything except notes.txt", String.valueOf(total - 1), tb.getTitle().toString());
+        menu(R.id.action_invert);
+        assertEquals("inverting twice leaves only notes.txt", "1", tb.getTitle().toString());
+
+        menu(R.id.action_select_type);                                    // opens the list of types
+        pressListItem(6);                                                 // Apps
+        assertEquals("the apk is added to the selection", "2", tb.getTitle().toString());
+    }
+
+    @Test public void gridViewShowsTilesAndSelectionBadges() throws Exception {
+        launch();
+        files().openDir(new File(storage, "DCIM/Camera"));
+        settle();
+        MaterialToolbar tb = files().getView().findViewById(R.id.toolbar);
+        assertEquals("Grid view", tb.getMenu().findItem(R.id.action_view_mode).getTitle().toString());
+        tb.getMenu().performIdentifierAction(R.id.action_view_mode, 0);
+        settle();
+        assertTrue(list().getLayoutManager() instanceof androidx.recyclerview.widget.GridLayoutManager);
+        assertEquals("List view", tb.getMenu().findItem(R.id.action_view_mode).getTitle().toString());
+        layout();
+        longClickRow("IMG_20260102_130000.jpg");
+        shot("51_grid_view");
+        View cell = list().findViewHolderForAdapterPosition(rowOf("IMG_20260102_130000.jpg")).itemView;
+        assertEquals(View.VISIBLE, cell.findViewById(R.id.check).getVisibility());
+        assertTrue(new Prefs(activity).grid());                           // remembered
+        tb.getMenu().performIdentifierAction(R.id.action_view_mode, 0);
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {

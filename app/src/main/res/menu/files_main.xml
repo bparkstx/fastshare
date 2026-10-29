@@ -4,6 +4,7 @@
     <item android:id="@+id/action_search" android:icon="@drawable/ic_search" android:title="Search" app:showAsAction="always"/>
     <item android:id="@+id/action_sort" android:icon="@drawable/ic_sort" android:title="Sort by" app:showAsAction="always"/>
     <item android:id="@+id/action_pin_folder" android:title="Add folder to favorites" app:showAsAction="never"/>
+    <item android:id="@+id/action_view_mode" android:title="Grid view" app:showAsAction="never"/>
     <item android:id="@+id/action_hidden" android:title="Show hidden files" android:checkable="true" app:showAsAction="never"/>
     <item android:id="@+id/action_refresh" android:title="Refresh" app:showAsAction="never"/>
 </menu>

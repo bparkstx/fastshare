@@ -52,6 +52,12 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     private static final List<File> clipboard = new ArrayList<>();
     private static boolean clipboardCut;
 
+    /** Forgets copied/cut files (tests start each case with an empty clipboard). */
+    static void resetClipboard() {
+        clipboard.clear();
+        clipboardCut = false;
+    }
+
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Set<String> selected = new LinkedHashSet<>();
@@ -115,6 +121,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         adapter = new FileAdapter(requireContext(), selected, this);
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
+        applyViewMode();
 
         toolbar.setNavigationOnClickListener(x -> {
             if (!selected.isEmpty()) clearSelection();
@@ -258,8 +265,23 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
 
     // ------------------------------------------------------------------ rendering
 
+    /** List or thumbnail grid, as chosen in the menu. */
+    private void applyViewMode() {
+        boolean grid = prefs.grid();
+        if (adapter.isGrid() == grid && list.getLayoutManager() != null
+                && (list.getLayoutManager() instanceof androidx.recyclerview.widget.GridLayoutManager) == grid) return;
+        adapter.setGrid(grid);
+        if (grid) {
+            float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
+            list.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(requireContext(), Math.max(3, (int) (widthDp / 120))));
+        } else {
+            list.setLayoutManager(new LinearLayoutManager(requireContext()));
+        }
+    }
+
     private void render() {
         if (!isAdded() || getView() == null) return;
+        applyViewMode();
         boolean access = hasAccess();
         permScreen.setVisibility(access ? View.GONE : View.VISIBLE);
         if (!access) {
@@ -314,7 +336,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             toolbar.setNavigationContentDescription("Cancel selection");
             boolean one = selected.size() == 1;
             m.findItem(R.id.action_favorite).setTitle(allFavorites(selectedFiles()) ? "Remove from favorites" : "Add to favorites");
-            m.findItem(R.id.action_rename).setVisible(one);
+            m.findItem(R.id.action_rename).setTitle(one ? "Rename..." : "Rename " + selected.size() + " files...");
             File f = one ? new File(selected.iterator().next()) : null;
             m.findItem(R.id.action_extract).setVisible(one && f != null && f.isFile()
                     && Archives.formatOf(f.getName()) != null);
@@ -325,6 +347,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         boolean atHome = currentDir == null && category == null && query == null;
         boolean inRealFolder = currentDir != null && category == null && query == null;
         m.findItem(R.id.action_pin_folder).setVisible(inRealFolder);
+        m.findItem(R.id.action_view_mode).setVisible(!atHome);
+        m.findItem(R.id.action_view_mode).setTitle(prefs.grid() ? "List view" : "Grid view");
         if (inRealFolder) {
             m.findItem(R.id.action_pin_folder).setTitle(prefs.favorites().contains(currentDir.getPath())
                     ? "Remove folder from favorites" : "Add folder to favorites");
@@ -703,7 +727,19 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         } else if (id == R.id.action_share) {
             FileActions.share(requireActivity(), selectedFiles());
         } else if (id == R.id.action_rename) {
-            showRenameDialog(new File(selected.iterator().next()));
+            if (selected.size() == 1) showRenameDialog(new File(selected.iterator().next()));
+            else showBatchRename(selectedFiles());
+        } else if (id == R.id.action_view_mode) {
+            prefs.setGrid(!prefs.grid());
+            render();
+        } else if (id == R.id.action_invert) {
+            Set<String> inverted = new HashSet<>();
+            for (FileOps.Item it : adapter.items()) if (!selected.contains(it.file.getPath())) inverted.add(it.file.getPath());
+            selected.clear();
+            selected.addAll(inverted);
+            selectionChanged();
+        } else if (id == R.id.action_select_type) {
+            showSelectTypeDialog();
         } else if (id == R.id.action_favorite) {
             toggleFavorites(selectedFiles());
             clearSelection();
@@ -812,6 +848,33 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             };
             pendingUndoMessage = "Renamed to " + renamed.getName();
             return renamed;
+        });
+    }
+
+    private void showSelectTypeDialog() {
+        final String[] labels = {"Folders", "Photos", "Videos", "Audio", "Documents", "Archives", "Apps", "Everything"};
+        final FileOps.Kind[] kinds = {FileOps.Kind.FOLDER, FileOps.Kind.IMAGE, FileOps.Kind.VIDEO, FileOps.Kind.AUDIO,
+                FileOps.Kind.DOCUMENT, FileOps.Kind.ARCHIVE, FileOps.Kind.APK, null};
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Select all")
+                .setItems(labels, (d, which) -> {
+                    for (FileOps.Item it : adapter.items()) {
+                        boolean match = kinds[which] == null || it.kind == kinds[which]
+                                || (kinds[which] == FileOps.Kind.DOCUMENT && it.kind == FileOps.Kind.TEXT);
+                        if (match) selected.add(it.file.getPath());
+                    }
+                    selectionChanged();
+                }).show();
+    }
+
+    private void showBatchRename(final List<File> files) {
+        BatchRenameDialog.show(requireContext(), files, undoPairs -> {
+            clearSelection();
+            render();
+            showUndo("Renamed " + Fmt.plural(undoPairs.size(), "file", "files"), () -> {
+                BatchRename.renamePairs(undoPairs);
+                return "Names restored";
+            });
         });
     }
 
