@@ -383,7 +383,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
         ContentValues v = new ContentValues();
         v.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
         v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/FastShare");
+        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/FileBandit");
         v.put(MediaStore.MediaColumns.IS_PENDING, 1);
         final Uri dest = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
         if (dest == null) throw new IOException("Cannot create a file in Downloads");
@@ -405,7 +405,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
                 try { resolver.delete(dest, null, null); } catch (Exception ignored) { }
             }
 
-            @Override public String location() { return "Downloads/FastShare"; }
+            @Override public String location() { return "Downloads/FileBandit"; }
         };
     }
 

@@ -140,7 +140,7 @@ public class FileServerTest {
         assertEquals(200, c.getResponseCode());
         assertTrue(c.getContentType().startsWith("text/html"));
         String html = new String(readAll(c.getInputStream()), StandardCharsets.UTF_8);
-        assertTrue(html.contains("FastShare"));
+        assertTrue(html.contains("FileBandit"));
         assertEquals(1, clients.size());
         assertEquals("127.0.0.1", clients.get(0));
     }

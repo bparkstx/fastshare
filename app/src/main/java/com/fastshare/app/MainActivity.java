@@ -109,7 +109,7 @@ public class MainActivity extends AppCompatActivity {
         if (dir != null && files != null) files.openDir(dir);
     }
 
-    // ------------------------------------------------------------------ "Share > FastShare" from other apps
+    // ------------------------------------------------------------------ "Share > FileBandit" from other apps
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;

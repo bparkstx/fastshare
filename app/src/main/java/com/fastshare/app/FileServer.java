@@ -47,7 +47,7 @@ public class FileServer {
         void commit() throws IOException;
         /** Called when the transfer failed; remove any partial file. */
         void abort();
-        /** Human readable place the file ended up, e.g. "Downloads/FastShare". */
+        /** Human readable place the file ended up, e.g. "Downloads/FileBandit". */
         String location();
     }
 
@@ -444,7 +444,7 @@ public class FileServer {
         return "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
                 + "<body style='font:17px/1.5 -apple-system,system-ui,sans-serif;padding:24px;max-width:520px;margin:auto'>"
                 + "<h2>This link is missing its code</h2>"
-                + "<p>Open FastShare on the Android phone and scan its QR code again with the iPhone Camera app, "
+                + "<p>Open FileBandit on the Android phone and scan its QR code again with the iPhone Camera app, "
                 + "or type the whole link exactly as shown, including the part after <b>?t=</b>.</p>";
     }
 

@@ -83,7 +83,7 @@ public class UiTest {
         write("Download/photos.zip", 12_800_000);
         write("Download/app-release.apk", 5_100_000);
         write("Download/notes.txt", 1_200);
-        write("Download/FastShare/IMG_4021.HEIC", 2_900_000);
+        write("Download/FileBandit/IMG_4021.HEIC", 2_900_000);
         write("DCIM/Camera/IMG_20260101_101010.jpg", 3_100_000);
         write("DCIM/Camera/IMG_20260102_130000.jpg", 2_800_000);
         write("Documents/Budget.xlsx", 88_000);
@@ -267,7 +267,7 @@ public class UiTest {
         assertEquals(View.VISIBLE, files().getView().findViewById(R.id.list).getVisibility());
         FileAdapter fa = (FileAdapter) list().getAdapter();
         // folders first, then files by name
-        assertEquals("FastShare", fa.items().get(0).name);
+        assertEquals("FileBandit", fa.items().get(0).name);
         assertEquals("Old stuff", fa.items().get(1).name);
         assertEquals("app-release.apk", fa.items().get(2).name);
         shot("03_folder_listing");
@@ -493,7 +493,7 @@ public class UiTest {
         done.done = 2_900_000;
         done.nanos = 180_000_000L;
         done.state = FileServer.State.DONE;
-        done.detail = "Downloads/FastShare";
+        done.detail = "Downloads/FileBandit";
         hub.onTransfer(done);
         FileServer.Transfer running = new FileServer.Transfer(2, false, "holiday-video.mp4", "192.168.23.40", 48_300_000);
         running.done = 21_000_000;

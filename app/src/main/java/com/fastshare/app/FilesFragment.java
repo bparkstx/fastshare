@@ -480,7 +480,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         addQuick(tiles, "Documents", R.drawable.ic_doc, R.color.kind_document, new File(root, "Documents"), false);
         addQuick(tiles, "Music", R.drawable.ic_audio, R.color.kind_audio, new File(root, "Music"), false);
         addQuick(tiles, "Movies", R.drawable.ic_video, R.color.kind_video, new File(root, "Movies"), false);
-        addQuick(tiles, "From iPhone", R.drawable.ic_swap, R.color.kind_apk, new File(root, "Download/FastShare"), true);
+        addQuick(tiles, "From iPhone", R.drawable.ic_swap, R.color.kind_apk, new File(root, "Download/FileBandit"), true);
         fillGrid(quick, tiles, 4);
 
         LinearLayout cats = v.findViewById(R.id.catGrid);

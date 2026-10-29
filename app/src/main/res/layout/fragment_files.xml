@@ -214,11 +214,11 @@
             android:visibility="gone">
 
             <ImageView
-                android:layout_width="64dp"
-                android:layout_height="64dp"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:alpha="0.9"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ic_folder"
-                app:tint="@color/fs_line" />
+                android:src="@drawable/mascot" />
 
             <TextView
                 android:id="@+id/emptyText"
@@ -242,13 +242,10 @@
             android:visibility="gone">
 
             <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:background="@drawable/bg_card_soft"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
                 android:importantForAccessibility="no"
-                android:padding="20dp"
-                android:src="@drawable/ic_folder"
-                app:tint="@color/fs_primary" />
+                android:src="@drawable/mascot" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -264,7 +261,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:gravity="center"
-                android:text="To browse, copy, move and delete files, Android needs your OK once.\n\n1. Tap the button below\n2. Turn on &#8220;Allow access to manage all files&#8221;\n3. Come back to FastShare"
+                android:text="To browse, copy, move and delete files, Android needs your OK once.\n\n1. Tap the button below\n2. Turn on &#8220;Allow access to manage all files&#8221;\n3. Come back to FileBandit"
                 android:textColor="@color/fs_muted"
                 android:textSize="15sp" />
 

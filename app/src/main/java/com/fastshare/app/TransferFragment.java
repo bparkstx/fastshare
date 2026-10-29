@@ -147,7 +147,7 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         });
         v.findViewById(R.id.pickOtherBtn).setOnClickListener(x -> picker.launch(new String[]{"*/*"}));
         v.findViewById(R.id.openReceivedBtn).setOnClickListener(x -> {
-            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FastShare");
+            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileBandit");
             //noinspection ResultOfMethodCallIgnored
             dir.mkdirs();
             ((MainActivity) requireActivity()).showFiles(dir);
@@ -217,7 +217,7 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         String url = hub.currentUrl();
         if (url == null) return;
         ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        cm.setPrimaryClip(ClipData.newPlainText("FastShare link", url));
+        cm.setPrimaryClip(ClipData.newPlainText("FileBandit link", url));
         Toast.makeText(requireContext(), "Link copied. Paste it into Safari on the iPhone.", Toast.LENGTH_SHORT).show();
     }
 
