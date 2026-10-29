@@ -316,7 +316,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             m.findItem(R.id.action_rename).setVisible(one);
             File f = one ? new File(selected.iterator().next()) : null;
             m.findItem(R.id.action_extract).setVisible(one && f != null && f.isFile()
-                    && "zip".equals(FileOps.extension(f.getName())));
+                    && Archives.formatOf(f.getName()) != null);
             return;
         }
         toolbar.inflateMenu(R.menu.files_main);
@@ -529,12 +529,12 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         }
         if (item.dir) {
             openDir(item.file);
-        } else if ("zip".equals(FileOps.extension(item.name))) {
-            final File zip = item.file;
+        } else if (Archives.formatOf(item.name) != null) {
+            final File archive = item.file;
             new MaterialAlertDialogBuilder(requireContext())
                     .setTitle(item.name)
                     .setItems(new String[]{"Extract here", "Open with another app"}, (d, which) -> {
-                        if (which == 0) extract(zip); else FileActions.open(requireActivity(), zip);
+                        if (which == 0) extract(archive); else FileActions.open(requireActivity(), archive);
                     }).show();
         } else {
             FileActions.open(requireActivity(), item.file);
@@ -603,6 +603,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             FileActions.share(requireActivity(), selectedFiles());
         } else if (id == R.id.action_rename) {
             showRenameDialog(new File(selected.iterator().next()));
+        } else if (id == R.id.action_compress) {
+            compress(selectedFiles());
         } else if (id == R.id.action_extract) {
             extract(new File(selected.iterator().next()));
         } else if (id == R.id.action_details) {
@@ -882,11 +884,50 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         });
     }
 
-    private void extract(final File zip) {
-        runJob("Extracting…", job -> {
-            job.label = zip.getName();
-            File out = FileOps.unzip(zip, job.cancel);
-            return "Extracted to “" + out.getName() + "”";
+    private void extract(final File archive) {
+        final File dest = archive.getParentFile();
+        runJob("Extracting\u2026", job -> {
+            job.label = archive.getName();
+            job.total = Archives.formatOf(archive.getName()) == Archives.Format.ZIP ? expandedSize(archive) : archive.length();
+            final File out = Archives.extract(archive, dest, job.cancel, job::addBytes);
+            job.undo = () -> {
+                FileOps.delete(out);
+                return "Removed \u201c" + out.getName() + "\u201d";
+            };
+            return "Extracted to \u201c" + out.getName() + "\u201d";
+        });
+    }
+
+    private static long expandedSize(File zip) {
+        long total = 0;
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip)) {
+            java.util.Enumeration<? extends java.util.zip.ZipEntry> en = z.entries();
+            while (en.hasMoreElements()) total += Math.max(0, en.nextElement().getSize());
+        } catch (Exception ignored) { }
+        return total;
+    }
+
+    private void compress(final List<File> files) {
+        if (files.isEmpty() || currentDir == null && category == null && query == null) return;
+        final File dest = files.get(0).getParentFile();
+        String suggestion = files.size() == 1 ? files.get(0).getName() : "Archive";
+        askName("Compress to zip", "Zip name", suggestion + ".zip", name -> {
+            String err = FileOps.checkName(name);
+            if (err != null) throw new java.io.IOException(err);
+            final String zipName = name.trim();
+            ui.post(() -> runJob("Compressing\u2026", job -> {
+                long total = 0;
+                for (File f : files) total += FileOps.sizeOf(f, job.cancel);
+                job.total = total;
+                job.label = zipName;
+                final File zip = Archives.compressZip(files, dest, zipName, job::addBytes, job.cancel);
+                job.undo = () -> {
+                    FileOps.delete(zip);
+                    return "Removed " + zip.getName();
+                };
+                return "Created \u201c" + zip.getName() + "\u201d (" + Fmt.bytes(zip.length()) + ")";
+            }));
+            return new File(dest, zipName);
         });
     }
 

@@ -485,6 +485,45 @@ public class UiTest {
         assertFalse(new File(storage, "Download/Old stuff/notes.txt").exists());
     }
 
+    @Test public void compressSelectionToZipThenUndo() throws Exception {
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        clickRow("Invoice March.pdf");
+        menu(R.id.action_compress);
+        androidx.appcompat.app.AlertDialog dlg = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        android.widget.EditText input = findEditText(dlg.getWindow().getDecorView());
+        assertEquals("Archive.zip", input.getText().toString());
+        shot("09a_compress_dialog");
+        input.setText("Paperwork.zip");
+        dlg.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        File zip = new File(storage, "Download/Paperwork.zip");
+        waitUntil(zip::exists);
+        assertTrue(zip.exists());
+        assertTrue(new File(storage, "Download/notes.txt").exists());      // originals stay
+        clickSnackbarAction();
+        assertFalse("undo removes the zip", zip.exists());
+    }
+
+    @Test public void tappingARarOffersExtractAndWorks() throws Exception {
+        File rar = new File(storage, "Download/stored.rar");
+        try (java.io.InputStream in = getClass().getResourceAsStream("/archives/stored.rar")) {
+            java.nio.file.Files.copy(in, rar.toPath());
+        }
+        launch();
+        files().openDir(new File(storage, "Download"));
+        settle();
+        clickRow("stored.rar");
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertEquals("stored.rar", ((android.widget.TextView) d.findViewById(androidx.appcompat.R.id.alertTitle)).getText().toString());
+        pressListItem(0);                                                  // Extract here
+        File out = new File(storage, "Download/stored/hello.txt");
+        waitUntil(out::exists);
+        assertTrue(out.exists());
+        assertTrue(new File(storage, "Download/stored/docs/readme.md").exists());
+    }
+
     @Test public void searchFindsFilesInSubfolders() throws Exception {
         launch();
         files().openDir(new File(storage, "Download"));
