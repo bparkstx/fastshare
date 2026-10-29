@@ -66,6 +66,28 @@ public class MainActivity extends AppCompatActivity {
         });
 
         handleIntent(getIntent());
+        purgeOldTrash();
+    }
+
+    /** Items stay in the recycle bin for 30 days, then go for good. */
+    private void purgeOldTrash() {
+        new Thread(() -> {
+            if (!Access.allFiles()) return;
+            for (File root : Volumes.roots(this)) {
+                try {
+                    new Trash(root).purgeOlderThan(Trash.DEFAULT_KEEP_MS);
+                } catch (Exception ignored) { }
+            }
+        }, "trash-purge").start();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (Nav.pending()) {
+            nav.setSelectedItemId(R.id.nav_files);
+            if (files != null) files.consumeNav();
+        }
     }
 
     @Override
@@ -109,7 +131,7 @@ public class MainActivity extends AppCompatActivity {
         if (dir != null && files != null) files.openDir(dir);
     }
 
-    // ------------------------------------------------------------------ "Share > FastShare" from other apps
+    // ------------------------------------------------------------------ "Share > FileBandit" from other apps
 
     private void handleIntent(Intent intent) {
         if (intent == null) return;

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_share" android:icon="@drawable/ic_share" android:title="Share" app:showAsAction="always"/>
+    <item android:id="@+id/action_send" android:icon="@drawable/ic_send" android:title="Send to iPhone" app:showAsAction="always"/>
+    <item android:id="@+id/action_delete" android:icon="@drawable/ic_delete" android:title="Move to trash" app:showAsAction="always"/>
+    <item android:id="@+id/action_info" android:title="Details" app:showAsAction="never"/>
+    <item android:id="@+id/action_open_with" android:title="Open with another app" app:showAsAction="never"/>
+</menu>

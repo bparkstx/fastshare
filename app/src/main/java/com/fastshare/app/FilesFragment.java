@@ -4,12 +4,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.StatFs;
-import android.os.storage.StorageManager;
-import android.os.storage.StorageVolume;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -54,6 +51,12 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     /** Files waiting to be pasted. Shared so it survives leaving and re-entering the tab. */
     private static final List<File> clipboard = new ArrayList<>();
     private static boolean clipboardCut;
+
+    /** Forgets copied/cut files (tests start each case with an empty clipboard). */
+    static void resetClipboard() {
+        clipboard.clear();
+        clipboardCut = false;
+    }
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -118,6 +121,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         adapter = new FileAdapter(requireContext(), selected, this);
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         list.setAdapter(adapter);
+        applyViewMode();
 
         toolbar.setNavigationOnClickListener(x -> {
             if (!selected.isEmpty()) clearSelection();
@@ -148,7 +152,21 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     @Override
     public void onResume() {
         super.onResume();
-        if (getView() != null && !isHidden()) render();
+        if (getView() != null && !isHidden()) {
+            consumeNav();
+            render();
+        }
+    }
+
+    /** Opens whatever another screen (such as Storage) asked the Files tab to show. */
+    void consumeNav() {
+        File d = Nav.dir;
+        MediaQuery.Category c = Nav.category;
+        if (d == null && c == null) return;
+        Nav.dir = null;
+        Nav.category = null;
+        if (getView() == null) return;
+        if (c != null) openCategory(c); else openDir(d);
     }
 
     @Override
@@ -173,44 +191,19 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     // ------------------------------------------------------------------ storage helpers
 
     private static File primaryRoot() {
-        return Environment.getExternalStorageDirectory();
+        return Volumes.primary();
     }
 
     private List<File> roots() {
-        List<File> out = new ArrayList<>();
-        out.add(primaryRoot());
-        try {
-            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
-            for (StorageVolume sv : sm.getStorageVolumes()) {
-                File d = sv.getDirectory();
-                if (d != null && !sv.isPrimary() && Environment.MEDIA_MOUNTED.equals(sv.getState())) out.add(d);
-            }
-        } catch (Exception ignored) { }
-        return out;
+        return Volumes.roots(requireContext());
     }
 
     private File rootOf(File f) {
-        File best = primaryRoot();
-        int bestLen = -1;
-        for (File r : roots()) {
-            String rp = r.getPath();
-            if ((f.getPath().equals(rp) || f.getPath().startsWith(rp + "/")) && rp.length() > bestLen) {
-                best = r;
-                bestLen = rp.length();
-            }
-        }
-        return best;
+        return Volumes.rootOf(roots(), f);
     }
 
     private String rootLabel(File root) {
-        if (root.equals(primaryRoot())) return "Internal storage";
-        try {
-            StorageManager sm = (StorageManager) requireContext().getSystemService(Context.STORAGE_SERVICE);
-            for (StorageVolume sv : sm.getStorageVolumes()) {
-                if (root.equals(sv.getDirectory())) return sv.getDescription(requireContext());
-            }
-        } catch (Exception ignored) { }
-        return root.getName();
+        return Volumes.label(requireContext(), root);
     }
 
     private static boolean hasAccess() {
@@ -286,8 +279,23 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
 
     // ------------------------------------------------------------------ rendering
 
+    /** List or thumbnail grid, as chosen in the menu. */
+    private void applyViewMode() {
+        boolean grid = prefs.grid();
+        if (adapter.isGrid() == grid && list.getLayoutManager() != null
+                && (list.getLayoutManager() instanceof androidx.recyclerview.widget.GridLayoutManager) == grid) return;
+        adapter.setGrid(grid);
+        if (grid) {
+            float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
+            list.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(requireContext(), Math.max(3, (int) (widthDp / 120))));
+        } else {
+            list.setLayoutManager(new LinearLayoutManager(requireContext()));
+        }
+    }
+
     private void render() {
         if (!isAdded() || getView() == null) return;
+        applyViewMode();
         boolean access = hasAccess();
         permScreen.setVisibility(access ? View.GONE : View.VISIBLE);
         if (!access) {
@@ -341,15 +349,24 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             toolbar.setNavigationIcon(R.drawable.ic_close);
             toolbar.setNavigationContentDescription("Cancel selection");
             boolean one = selected.size() == 1;
-            m.findItem(R.id.action_rename).setVisible(one);
+            m.findItem(R.id.action_favorite).setTitle(allFavorites(selectedFiles()) ? "Remove from favorites" : "Add to favorites");
+            m.findItem(R.id.action_rename).setTitle(one ? "Rename..." : "Rename " + selected.size() + " files...");
             File f = one ? new File(selected.iterator().next()) : null;
             m.findItem(R.id.action_extract).setVisible(one && f != null && f.isFile()
-                    && "zip".equals(FileOps.extension(f.getName())));
+                    && Archives.formatOf(f.getName()) != null);
             return;
         }
         toolbar.inflateMenu(R.menu.files_main);
         m.findItem(R.id.action_hidden).setChecked(prefs.showHidden());
         boolean atHome = currentDir == null && category == null && query == null;
+        boolean inRealFolder = currentDir != null && category == null && query == null;
+        m.findItem(R.id.action_pin_folder).setVisible(inRealFolder);
+        m.findItem(R.id.action_view_mode).setVisible(!atHome);
+        m.findItem(R.id.action_view_mode).setTitle(prefs.grid() ? "List view" : "Grid view");
+        if (inRealFolder) {
+            m.findItem(R.id.action_pin_folder).setTitle(prefs.favorites().contains(currentDir.getPath())
+                    ? "Remove folder from favorites" : "Add folder to favorites");
+        }
         m.findItem(R.id.action_sort).setVisible(!atHome && query == null && category == null);
         if (atHome) {
             toolbar.setTitle("Files");
@@ -458,7 +475,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             long free = fs.getAvailableBytes();
             if (total > 0) {
                 long used = total - free;
-                sub.setText(Fmt.bytes(used) + " used of " + Fmt.bytes(total) + "  ·  " + Fmt.bytes(free) + " free");
+                sub.setText(Fmt.bytes(free) + " free of " + Fmt.bytes(total));
                 bar.setProgress((int) (used * 1000 / total));
                 bar.setVisibility(View.VISIBLE);
             } else {
@@ -480,16 +497,35 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         addQuick(tiles, "Documents", R.drawable.ic_doc, R.color.kind_document, new File(root, "Documents"), false);
         addQuick(tiles, "Music", R.drawable.ic_audio, R.color.kind_audio, new File(root, "Music"), false);
         addQuick(tiles, "Movies", R.drawable.ic_video, R.color.kind_video, new File(root, "Movies"), false);
-        addQuick(tiles, "From iPhone", R.drawable.ic_swap, R.color.kind_apk, new File(root, "Download/FastShare"), true);
+        addQuick(tiles, "From iPhone", R.drawable.ic_swap, R.color.kind_apk, new File(root, "Download/FileBandit"), true);
         fillGrid(quick, tiles, 4);
+
+        refreshFavorites(v);
+        refreshRecent(v);
 
         LinearLayout cats = v.findViewById(R.id.catGrid);
         cats.removeAllViews();
         List<Object[]> catTiles = new ArrayList<>();
         for (final MediaQuery.Category c : MediaQuery.Category.values()) {
+            if (c == MediaQuery.Category.RECENT) continue;       // has its own section above
             catTiles.add(new Object[]{c.title, c.icon, Kinds.color(requireContext(), c.kind), (Runnable) () -> openCategory(c)});
         }
+        catTiles.add(new Object[]{"Trash", R.drawable.ic_delete, ContextCompat.getColor(requireContext(), R.color.kind_other),
+                (Runnable) () -> startActivity(new Intent(requireContext(), TrashActivity.class))});
         fillGrid(cats, catTiles, 3);
+
+        LinearLayout tools = v.findViewById(R.id.toolsGrid);
+        tools.removeAllViews();
+        List<Object[]> toolTiles = new ArrayList<>();
+        toolTiles.add(new Object[]{"Storage", R.drawable.ic_storage, ContextCompat.getColor(requireContext(), R.color.kind_archive),
+                (Runnable) () -> startActivity(new Intent(requireContext(), StorageActivity.class))});
+        toolTiles.add(new Object[]{"Vault", R.drawable.ic_lock, ContextCompat.getColor(requireContext(), R.color.kind_audio),
+                (Runnable) () -> startActivity(new Intent(requireContext(), VaultActivity.class))});
+        toolTiles.add(new Object[]{"Apps", R.drawable.ic_apk, ContextCompat.getColor(requireContext(), R.color.kind_apk),
+                (Runnable) () -> startActivity(new Intent(requireContext(), AppsActivity.class))});
+        toolTiles.add(new Object[]{"Network", R.drawable.ic_cloud, ContextCompat.getColor(requireContext(), R.color.kind_document),
+                (Runnable) () -> startActivity(new Intent(requireContext(), NetworkActivity.class))});
+        fillGrid(tools, toolTiles, 4);
 
         LinearLayout vols = v.findViewById(R.id.volumes);
         vols.removeAllViews();
@@ -534,6 +570,13 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             ((TextView) tile.findViewById(R.id.tileLabel)).setText((String) t[0]);
             final Runnable action = (Runnable) t[3];
             tile.setOnClickListener(x -> action.run());
+            if (t.length > 4) {
+                final Runnable longAction = (Runnable) t[4];
+                tile.setOnLongClickListener(x -> {
+                    longAction.run();
+                    return true;
+                });
+            }
             row.addView(tile);
         }
         // keep the last row's tiles the same width as the others
@@ -543,6 +586,89 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                 row.addView(filler, new LinearLayout.LayoutParams(0, 1, 1f));
             }
         }
+    }
+
+    // ------------------------------------------------------------------ favorites and recent files
+
+    private boolean allFavorites(List<File> files) {
+        List<String> favs = prefs.favorites();
+        for (File f : files) if (!favs.contains(f.getPath())) return false;
+        return !files.isEmpty();
+    }
+
+    /** Adds the files to favorites, or removes them if they all are favorites already. */
+    private void toggleFavorites(List<File> files) {
+        List<String> favs = prefs.favorites();
+        boolean remove = allFavorites(files);
+        for (File f : files) {
+            if (remove) favs.remove(f.getPath());
+            else if (!favs.contains(f.getPath())) favs.add(f.getPath());
+        }
+        prefs.setFavorites(favs);
+        Toast.makeText(requireContext(), remove ? "Removed from favorites" : "Added to favorites", Toast.LENGTH_SHORT).show();
+    }
+
+    private void refreshFavorites(View v) {
+        LinearLayout grid = v.findViewById(R.id.favGrid);
+        grid.removeAllViews();
+        List<Object[]> tiles = new ArrayList<>();
+        List<String> favs = prefs.favorites();
+        List<String> alive = new ArrayList<>();
+        for (final String path : favs) {
+            final File f = new File(path);
+            if (!f.exists()) continue;                                 // deleted or moved elsewhere
+            alive.add(path);
+            FileOps.Kind kind = f.isDirectory() ? FileOps.Kind.FOLDER : FileOps.kindOfName(f.getName());
+            tiles.add(new Object[]{f.getName(), Kinds.icon(kind), Kinds.color(requireContext(), kind),
+                    (Runnable) () -> openAny(f),
+                    (Runnable) () -> {
+                        List<String> now = prefs.favorites();
+                        now.remove(path);
+                        prefs.setFavorites(now);
+                        Toast.makeText(requireContext(), "Removed from favorites", Toast.LENGTH_SHORT).show();
+                        refreshHome();
+                    }});
+        }
+        if (alive.size() != favs.size()) prefs.setFavorites(alive);
+        v.findViewById(R.id.favTitle).setVisibility(tiles.isEmpty() ? View.GONE : View.VISIBLE);
+        grid.setVisibility(tiles.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!tiles.isEmpty()) fillGrid(grid, tiles, 4);
+    }
+
+    private void refreshRecent(final View v) {
+        final LinearLayout listView = v.findViewById(R.id.recentList);
+        final View header = v.findViewById(R.id.recentHeader);
+        v.findViewById(R.id.recentAll).setOnClickListener(x -> openCategory(MediaQuery.Category.RECENT));
+        final Context appCtx = requireContext().getApplicationContext();
+        final boolean hidden = prefs.showHidden();
+        final int g = ++homeGen;
+        io.execute(() -> {
+            final List<FileOps.Item> recent = MediaQuery.items(appCtx, MediaQuery.Category.RECENT, hidden, 5);
+            ui.post(() -> {
+                if (g != homeGen || !isAdded() || getView() == null) return;
+                listView.removeAllViews();
+                header.setVisibility(recent.isEmpty() ? View.GONE : View.VISIBLE);
+                LayoutInflater inf = LayoutInflater.from(requireContext());
+                for (final FileOps.Item item : recent) {
+                    View row = inf.inflate(R.layout.item_file, listView, false);
+                    ((TextView) row.findViewById(R.id.name)).setText(item.name);
+                    File parent = item.file.getParentFile();
+                    ((TextView) row.findViewById(R.id.sub)).setText(Fmt.bytes(item.size) + "  \u00b7  "
+                            + Fmt.ago(item.modified, System.currentTimeMillis())
+                            + (parent == null ? "" : "  \u00b7  " + parent.getName()));
+                    FileAdapter.styleIcon(requireContext(), (ImageView) row.findViewById(R.id.icon), item);
+                    row.setOnClickListener(x -> openAny(item.file));
+                    listView.addView(row);
+                }
+            });
+        });
+    }
+
+    private int homeGen;
+
+    /** Opens a folder inside the file manager, or a file with its viewer. */
+    private void openAny(File f) {
+        if (f.isDirectory()) openDir(f); else Viewer.open(requireActivity(), f, null);
     }
 
     // ------------------------------------------------------------------ selection and clicks
@@ -555,15 +681,17 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         }
         if (item.dir) {
             openDir(item.file);
-        } else if ("zip".equals(FileOps.extension(item.name))) {
-            final File zip = item.file;
+        } else if (Archives.formatOf(item.name) != null) {
+            final File archive = item.file;
             new MaterialAlertDialogBuilder(requireContext())
                     .setTitle(item.name)
                     .setItems(new String[]{"Extract here", "Open with another app"}, (d, which) -> {
-                        if (which == 0) extract(zip); else FileActions.open(requireActivity(), zip);
+                        if (which == 0) extract(archive); else FileActions.open(requireActivity(), archive);
                     }).show();
         } else {
-            FileActions.open(requireActivity(), item.file);
+            List<File> neighbours = new ArrayList<>();
+            for (FileOps.Item it : adapter.items()) if (!it.dir) neighbours.add(it.file);
+            Viewer.open(requireActivity(), item.file, neighbours);
         }
     }
 
@@ -619,6 +747,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             clearSelection();
             updatePasteBar();
         } else if (id == R.id.action_delete) {
+            trashFiles(selectedFiles());
+        } else if (id == R.id.action_delete_forever) {
             confirmDelete(selectedFiles());
         } else if (id == R.id.action_select_all) {
             for (FileOps.Item it : adapter.items()) selected.add(it.file.getPath());
@@ -626,7 +756,31 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         } else if (id == R.id.action_share) {
             FileActions.share(requireActivity(), selectedFiles());
         } else if (id == R.id.action_rename) {
-            showRenameDialog(new File(selected.iterator().next()));
+            if (selected.size() == 1) showRenameDialog(new File(selected.iterator().next()));
+            else showBatchRename(selectedFiles());
+        } else if (id == R.id.action_view_mode) {
+            prefs.setGrid(!prefs.grid());
+            render();
+        } else if (id == R.id.action_invert) {
+            Set<String> inverted = new HashSet<>();
+            for (FileOps.Item it : adapter.items()) if (!selected.contains(it.file.getPath())) inverted.add(it.file.getPath());
+            selected.clear();
+            selected.addAll(inverted);
+            selectionChanged();
+        } else if (id == R.id.action_select_type) {
+            showSelectTypeDialog();
+        } else if (id == R.id.action_favorite) {
+            toggleFavorites(selectedFiles());
+            clearSelection();
+        } else if (id == R.id.action_pin_folder) {
+            toggleFavorites(java.util.Collections.singletonList(currentDir));
+            updateToolbar();
+        } else if (id == R.id.action_upload_network) {
+            chooseNetworkLocation(selectedFiles());
+        } else if (id == R.id.action_vault) {
+            confirmMoveToVault(selectedFiles());
+        } else if (id == R.id.action_compress) {
+            compress(selectedFiles());
         } else if (id == R.id.action_extract) {
             extract(new File(selected.iterator().next()));
         } else if (id == R.id.action_details) {
@@ -718,8 +872,83 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
     }
 
     private void showRenameDialog(final File f) {
-        askName("Rename", "New name", f.getName(), name -> FileOps.rename(f, name));
+        askName("Rename", "New name", f.getName(), name -> {
+            final File renamed = FileOps.rename(f, name);
+            final String oldName = f.getName();
+            pendingUndo = () -> {
+                FileOps.rename(renamed, oldName);
+                return "Renamed back to " + oldName;
+            };
+            pendingUndoMessage = "Renamed to " + renamed.getName();
+            return renamed;
+        });
     }
+
+    /** Picks which saved server to send the selection to; the upload itself happens in the server's own screen. */
+    private void chooseNetworkLocation(final List<File> files) {
+        final List<Connection> saved = RemoteSession.store(requireContext()).list();
+        if (saved.isEmpty()) {
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("No network locations yet")
+                    .setMessage("Add a computer, NAS or server first, then send files to it from here.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Add one", (d, w) -> startActivity(new Intent(requireContext(), NetworkActivity.class))).show();
+            return;
+        }
+        String[] names = new String[saved.size()];
+        for (int i = 0; i < names.length; i++) names[i] = saved.get(i).name.isEmpty() ? saved.get(i).host : saved.get(i).name;
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Upload " + Fmt.plural(files.size(), "item", "items") + " to…")
+                .setItems(names, (d, which) -> {
+                    RemoteSession.pendingUploads.clear();
+                    RemoteSession.pendingUploads.addAll(files);
+                    clearSelection();
+                    startActivity(new Intent(requireContext(), RemoteActivity.class).putExtra(RemoteActivity.EXTRA_ID, saved.get(which).id));
+                }).show();
+    }
+
+    private void confirmMoveToVault(final List<File> files) {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Move " + Fmt.plural(files.size(), "item", "items") + " to the private vault?")
+                .setMessage("They are encrypted with your PIN, then the originals are deleted. If you forget the PIN, they can't be recovered.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Continue", (d, w) -> {
+                    VaultSession.pending.clear();
+                    VaultSession.pending.addAll(files);
+                    clearSelection();
+                    startActivity(new Intent(requireContext(), VaultActivity.class));
+                }).show();
+    }
+
+    private void showSelectTypeDialog() {
+        final String[] labels = {"Folders", "Photos", "Videos", "Audio", "Documents", "Archives", "Apps", "Everything"};
+        final FileOps.Kind[] kinds = {FileOps.Kind.FOLDER, FileOps.Kind.IMAGE, FileOps.Kind.VIDEO, FileOps.Kind.AUDIO,
+                FileOps.Kind.DOCUMENT, FileOps.Kind.ARCHIVE, FileOps.Kind.APK, null};
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Select all")
+                .setItems(labels, (d, which) -> {
+                    for (FileOps.Item it : adapter.items()) {
+                        boolean match = kinds[which] == null || it.kind == kinds[which]
+                                || (kinds[which] == FileOps.Kind.DOCUMENT && it.kind == FileOps.Kind.TEXT);
+                        if (match) selected.add(it.file.getPath());
+                    }
+                    selectionChanged();
+                }).show();
+    }
+
+    private void showBatchRename(final List<File> files) {
+        BatchRenameDialog.show(requireContext(), files, undoPairs -> {
+            clearSelection();
+            render();
+            showUndo("Renamed " + Fmt.plural(undoPairs.size(), "file", "files"), () -> {
+                BatchRename.renamePairs(undoPairs);
+                return "Names restored";
+            });
+        });
+    }
+
+    private Undo pendingUndo;
+    private String pendingUndoMessage;
 
     private interface NameAction {
         File run(String name) throws Exception;
@@ -747,6 +976,10 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                     dlg.dismiss();
                     clearSelection();
                     render();
+                    if (pendingUndo != null) {
+                        showUndo(pendingUndoMessage, pendingUndo);
+                        pendingUndo = null;
+                    }
                 } catch (Exception e) {
                     input.setError(e.getMessage());
                 }
@@ -765,11 +998,44 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         }
     }
 
+    /** Moves files to the recycle bin; "Undo" puts them straight back. */
+    private void trashFiles(final List<File> files) {
+        final List<File> roots = roots();
+        runJob("Moving to trash\u2026", job -> {
+            final List<Trash> owners = new ArrayList<>();
+            final List<Trash.Entry> entries = new ArrayList<>();
+            String error = null;
+            for (File f : files) {
+                if (job.cancel.get()) break;
+                job.label = f.getName();
+                try {
+                    Trash t = new Trash(Volumes.rootOf(roots, f));
+                    entries.add(t.trash(f));
+                    owners.add(t);
+                } catch (Exception e) {
+                    error = e.getMessage();
+                }
+            }
+            if (!entries.isEmpty()) {
+                job.undo = () -> {
+                    int n = 0;
+                    for (int i = 0; i < entries.size(); i++) {
+                        owners.get(i).restore(entries.get(i));
+                        n++;
+                    }
+                    return "Restored " + Fmt.plural(n, "item", "items");
+                };
+            }
+            String msg = entries.isEmpty() ? "Nothing was deleted" : "Moved " + Fmt.plural(entries.size(), "item", "items") + " to trash";
+            return error == null ? msg : msg + ". " + error;
+        });
+    }
+
     private void confirmDelete(final List<File> files) {
         String what = files.size() == 1 ? "“" + files.get(0).getName() + "”" : Fmt.plural(files.size(), "item", "items");
         new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Delete " + what + "?")
-                .setMessage("This can't be undone.")
+                .setTitle("Delete " + what + " permanently?")
+                .setMessage("It will not go to the trash. This can't be undone.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Delete", (d, w) -> runJob("Deleting…", job -> {
                     int failed = 0;
@@ -823,12 +1089,16 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             job.total = total;
             int done = 0;
             StringBuilder errors = new StringBuilder();
+            final List<File> results = new ArrayList<>();
+            final List<File> origins = new ArrayList<>();
             for (File f : files) {
                 if (job.cancel.get()) break;
                 job.label = f.getName();
                 try {
-                    if (cut) FileOps.move(f, dest, job::addBytes, job.cancel);
-                    else FileOps.copy(f, dest, job::addBytes, job.cancel);
+                    File made = cut ? FileOps.move(f, dest, job::addBytes, job.cancel)
+                            : FileOps.copy(f, dest, job::addBytes, job.cancel);
+                    results.add(made);
+                    origins.add(f);
                     done++;
                 } catch (Exception e) {
                     if (errors.length() > 0) errors.append('\n');
@@ -838,18 +1108,74 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             if (cut && errors.length() == 0) {
                 ui.post(clipboard::clear);
             }
+            if (!results.isEmpty()) {
+                job.undo = () -> {
+                    for (int i = 0; i < results.size(); i++) {
+                        if (cut) FileOps.move(results.get(i), origins.get(i).getParentFile(), null, null);
+                        else FileOps.delete(results.get(i));
+                    }
+                    return cut ? "Moved back" : "Copy removed";
+                };
+            }
             String verb = cut ? "Moved " : "Copied ";
             return errors.length() == 0 ? verb + Fmt.plural(done, "item", "items")
                     : verb + done + " of " + files.size() + ". " + errors;
         });
     }
 
-    private void extract(final File zip) {
-        runJob("Extracting…", job -> {
-            job.label = zip.getName();
-            File out = FileOps.unzip(zip, job.cancel);
-            return "Extracted to “" + out.getName() + "”";
+    private void extract(final File archive) {
+        final File dest = archive.getParentFile();
+        runJob("Extracting\u2026", job -> {
+            job.label = archive.getName();
+            job.total = Archives.formatOf(archive.getName()) == Archives.Format.ZIP ? expandedSize(archive) : archive.length();
+            final File out = Archives.extract(archive, dest, job.cancel, job::addBytes);
+            job.undo = () -> {
+                FileOps.delete(out);
+                return "Removed \u201c" + out.getName() + "\u201d";
+            };
+            return "Extracted to \u201c" + out.getName() + "\u201d";
         });
+    }
+
+    private static long expandedSize(File zip) {
+        long total = 0;
+        try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(zip)) {
+            java.util.Enumeration<? extends java.util.zip.ZipEntry> en = z.entries();
+            while (en.hasMoreElements()) total += Math.max(0, en.nextElement().getSize());
+        } catch (Exception ignored) { }
+        return total;
+    }
+
+    private void compress(final List<File> files) {
+        if (files.isEmpty() || currentDir == null && category == null && query == null) return;
+        final File dest = files.get(0).getParentFile();
+        String suggestion = files.size() == 1 ? files.get(0).getName() : "Archive";
+        askName("Compress to zip", "Zip name", suggestion + ".zip", name -> {
+            String err = FileOps.checkName(name);
+            if (err != null) throw new java.io.IOException(err);
+            final String zipName = name.trim();
+            ui.post(() -> runJob("Compressing\u2026", job -> {
+                long total = 0;
+                for (File f : files) total += FileOps.sizeOf(f, job.cancel);
+                job.total = total;
+                job.label = zipName;
+                final File zip = Archives.compressZip(files, dest, zipName, job::addBytes, job.cancel);
+                job.undo = () -> {
+                    FileOps.delete(zip);
+                    return "Removed " + zip.getName();
+                };
+                return "Created \u201c" + zip.getName() + "\u201d (" + Fmt.bytes(zip.length()) + ")";
+            }));
+            return new File(dest, zipName);
+        });
+    }
+
+    /** A snackbar with an Undo button that stays long enough to be tapped. */
+    private void showUndo(String message, final Undo undo) {
+        if (!isAdded() || getView() == null) return;
+        Snackbar.make(requireView(), message, 8000)
+                .setAction("Undo", v -> runJob("Undoing\u2026", job -> undo.run()))
+                .show();
     }
 
     private static final class Job {
@@ -857,6 +1183,7 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         volatile long total;
         volatile long done;
         volatile String label = "";
+        volatile Undo undo;
 
         void addBytes(long n) {
             done += n;
@@ -917,7 +1244,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                     if (dlg.isShowing()) dlg.dismiss();
                     if (!isAdded() || getView() == null) return;
                     selected.clear();
-                    Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show();
+                    if (job.undo != null) showUndo(result, job.undo);
+                    else Snackbar.make(requireView(), result, Snackbar.LENGTH_LONG).show();
                     render();
                 });
             });

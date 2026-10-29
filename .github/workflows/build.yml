@@ -22,7 +22,13 @@ jobs:
           SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
-      - name: Run tests (server, file operations and the app's screens)
+      - name: Install real test servers (WebDAV, SMB, SFTP)
+        # The network-location tests talk to real servers on localhost. Without these they are skipped.
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pyenv"
+          "$RUNNER_TEMP/pyenv/bin/pip" install --quiet wsgidav cheroot impacket asyncssh
+          echo "FB_PYENV_BIN=$RUNNER_TEMP/pyenv/bin" >> "$GITHUB_ENV"
+      - name: Run tests (server, file operations, network protocols and the app's screens)
         run: ./gradlew --no-daemon testDebugUnitTest
       - name: Load signing key
         # FASTSHARE_SIGNING_KEY is "<password>:<base64 keystore>". Without it the APK is signed with
@@ -36,7 +42,7 @@ jobs:
             echo "$SIGNING_KEY" | cut -d: -f2- | base64 -d > "$RUNNER_TEMP/fastshare.p12"
             echo "FASTSHARE_KEYSTORE=$RUNNER_TEMP/fastshare.p12" >> "$GITHUB_ENV"
             echo "FASTSHARE_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
-            echo "Signing with the FastShare key"
+            echo "Signing with the FileBandit key"
           else
             echo "::warning::No FASTSHARE_SIGNING_KEY secret, signing with a temporary debug key"
           fi
@@ -47,7 +53,7 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep -E "DN|SHA-256"
       - uses: actions/upload-artifact@v4
         with:
-          name: FastShare-apk
+          name: FileBandit-apk
           path: app/build/outputs/apk/release/*.apk
       - uses: actions/upload-artifact@v4
         if: always()
@@ -65,14 +71,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/release/app-release.apk FastShare.apk
+          cp app/build/outputs/apk/release/app-release.apk FileBandit.apk
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             gh release delete latest --yes --cleanup-tag || true
-            gh release create latest FastShare.apk --target "$GITHUB_SHA" --title "FastShare APK" \
-              --notes "Latest build. Download FastShare.apk on your Android phone and open it to install."
+            gh release create latest FileBandit.apk --target "$GITHUB_SHA" --title "FileBandit APK" \
+              --notes "Latest build. Download FileBandit.apk on your Android phone and open it to install."
           else
             gh release delete preview --yes --cleanup-tag || true
-            gh release create preview FastShare.apk --target "$GITHUB_SHA" --prerelease \
-              --title "FastShare preview ($GITHUB_REF_NAME)" \
+            gh release create preview FileBandit.apk --target "$GITHUB_SHA" --prerelease \
+              --title "FileBandit preview ($GITHUB_REF_NAME)" \
               --notes "Test build from branch $GITHUB_REF_NAME. Not the main release."
           fi

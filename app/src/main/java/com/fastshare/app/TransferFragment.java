@@ -52,7 +52,10 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
     private MaterialButtonToggleGroup methodGroup, qrModeGroup;
     private TextView step1Title, step1Body, step2Body, hotspotInfo, qrCaption, linkText, helpText, selfTestResult, sharedTitle;
     private View hotspotBox, sharedCard, activityCard, helpBody;
-    private MaterialButton hotspotBtn, copyBtn, otherAddrBtn;
+    private MaterialButton hotspotBtn, copyBtn, shareBtn, otherAddrBtn;
+    private com.google.android.material.materialswitch.MaterialSwitch pinSwitch;
+    private TextView pinText, pinHelp;
+    private boolean pinBinding;
     private ImageView qrView, helpChevron;
     private LinearLayout sharedList, activityList;
 
@@ -112,6 +115,10 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         qrCaption = v.findViewById(R.id.qrCaption);
         linkText = v.findViewById(R.id.linkText);
         copyBtn = v.findViewById(R.id.copyBtn);
+        shareBtn = v.findViewById(R.id.shareBtn);
+        pinSwitch = v.findViewById(R.id.pinSwitch);
+        pinText = v.findViewById(R.id.pinText);
+        pinHelp = v.findViewById(R.id.pinHelp);
         otherAddrBtn = v.findViewById(R.id.otherAddrBtn);
         sharedCard = v.findViewById(R.id.sharedCard);
         sharedTitle = v.findViewById(R.id.sharedTitle);
@@ -139,6 +146,20 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
 
         hotspotBtn.setOnClickListener(x -> toggleHotspot());
         copyBtn.setOnClickListener(x -> copyLink());
+        shareBtn.setOnClickListener(x -> shareLink());
+        pinSwitch.setOnCheckedChangeListener((b, on) -> {
+            if (pinBinding) return;
+            if (on) hub.setLinkPin(String.format(java.util.Locale.US, "%04d", new java.security.SecureRandom().nextInt(10000)));
+            else hub.setLinkPin("");
+            render();
+        });
+        pinText.setOnClickListener(x -> {
+            if (hub.linkPin().isEmpty()) return;
+            hub.setLinkPin(String.format(java.util.Locale.US, "%04d", new java.security.SecureRandom().nextInt(10000)));
+            Toast.makeText(requireContext(), "New PIN. Devices that were signed in have to enter it again.", Toast.LENGTH_SHORT).show();
+            render();
+        });
+        v.findViewById(R.id.historyBtn).setOnClickListener(x -> startActivity(new android.content.Intent(requireContext(), HistoryActivity.class)));
         otherAddrBtn.setOnClickListener(x -> hub.nextAddress());
         v.findViewById(R.id.pickFilesBtn).setOnClickListener(x -> {
             Toast.makeText(requireContext(),
@@ -147,7 +168,7 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         });
         v.findViewById(R.id.pickOtherBtn).setOnClickListener(x -> picker.launch(new String[]{"*/*"}));
         v.findViewById(R.id.openReceivedBtn).setOnClickListener(x -> {
-            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FastShare");
+            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "FileBandit");
             //noinspection ResultOfMethodCallIgnored
             dir.mkdirs();
             ((MainActivity) requireActivity()).showFiles(dir);
@@ -217,8 +238,18 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         String url = hub.currentUrl();
         if (url == null) return;
         ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        cm.setPrimaryClip(ClipData.newPlainText("FastShare link", url));
+        cm.setPrimaryClip(ClipData.newPlainText("FileBandit link", url));
         Toast.makeText(requireContext(), "Link copied. Paste it into Safari on the iPhone.", Toast.LENGTH_SHORT).show();
+    }
+
+    private void shareLink() {
+        String url = hub.currentUrl();
+        if (url == null) return;
+        android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(android.content.Intent.EXTRA_SUBJECT, "FileBandit link");
+        send.putExtra(android.content.Intent.EXTRA_TEXT, "Open this on the same Wi-Fi to send files to my phone or get files from it:\n" + url);
+        startActivity(android.content.Intent.createChooser(send, "Share link"));
     }
 
     // ------------------------------------------------------------------ rendering
@@ -344,6 +375,16 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
             }
         }
         copyBtn.setVisibility(linkShown && content != null ? View.VISIBLE : View.GONE);
+        shareBtn.setVisibility(linkShown && content != null ? View.VISIBLE : View.GONE);
+        String linkPin = hub.linkPin();
+        pinBinding = true;
+        pinSwitch.setChecked(!linkPin.isEmpty());
+        pinBinding = false;
+        pinText.setText(linkPin);
+        pinText.setVisibility(linkPin.isEmpty() ? View.GONE : View.VISIBLE);
+        pinHelp.setText(linkPin.isEmpty()
+                ? "Anyone on the same Wi-Fi who has the link can use it. Turn this on to ask for a PIN first."
+                : "The other device asks for this PIN after it opens the link. Tap the number for a new one.");
         otherAddrBtn.setVisibility(linkShown && hub.addrs().size() > 1 ? View.VISIBLE : View.GONE);
         if (content == null) {
             lastQr = "";
@@ -405,7 +446,7 @@ public class TransferFragment extends Fragment implements ShareHub.HubListener {
         LayoutInflater inf = LayoutInflater.from(requireContext());
         for (FileServer.Transfer t : ts) {
             View row = inf.inflate(R.layout.item_activity_row, activityList, false);
-            ((TextView) row.findViewById(R.id.aTitle)).setText((t.incoming ? "From iPhone:  " : "To iPhone:  ") + t.name);
+            ((TextView) row.findViewById(R.id.aTitle)).setText((t.incoming ? "Received:  " : "Sent:  ") + t.name);
             LinearProgressIndicator bar = row.findViewById(R.id.aBar);
             TextView sub = (TextView) row.findViewById(R.id.aSub);
             int c;

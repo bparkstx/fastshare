@@ -101,6 +101,8 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
     private volatile boolean everConnected;
     private volatile long lastClientNotify;
     private final List<FileServer.Transfer> transfers = new CopyOnWriteArrayList<>();
+    private final History history;
+    private final Prefs prefs;
 
     // network
     private Net.Info net = new Net.Info(false, new ArrayList<Net.Addr>());
@@ -117,6 +119,8 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
 
     ShareHub(Context app) {
         this.app = app.getApplicationContext();
+        this.history = new History(new File(this.app.getFilesDir(), "transfer_history.tsv"));
+        this.prefs = new Prefs(this.app);
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -125,6 +129,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
         if (server != null && server.isRunning()) return;
         token = randomToken(8);
         server = new FileServer(token, this, this);
+        server.setPin(prefs.linkPin());
         try {
             port = server.start(PORT);
             error = null;
@@ -205,6 +210,16 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
     public Net.Info net() { return net; }
     public boolean everConnected() { return everConnected; }
     public List<FileServer.Transfer> transfers() { return transfers; }
+    public History history() { return history; }
+
+    /** The PIN devices must enter after opening the link, or empty when there isn't one. */
+    public String linkPin() { return prefs.linkPin(); }
+
+    public void setLinkPin(String pin) {
+        prefs.setLinkPin(pin);
+        if (server != null) server.setPin(pin);
+        changed();
+    }
     public List<FileServer.Shared> shared() { return server == null ? new ArrayList<FileServer.Shared>() : server.getShared(); }
 
     /** Devices that talked to the server in the last few seconds. */
@@ -332,6 +347,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
 
     @Override
     public void onTransfer(FileServer.Transfer t) {
+        if (t.state != FileServer.State.ACTIVE) history.record(History.of(t));
         if (!transfers.contains(t)) {
             transfers.add(0, t);
             while (transfers.size() > 40) transfers.remove(transfers.size() - 1);
@@ -374,6 +390,11 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
     }
 
     @Override
+    public File partialDir() {
+        return new File(app.getCacheDir(), "uploads");
+    }
+
+    @Override
     public FileServer.Sink openSink(String fileName) throws IOException {
         final ContentResolver resolver = app.getContentResolver();
         String ext = FileOps.extension(fileName);
@@ -383,7 +404,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
         ContentValues v = new ContentValues();
         v.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
         v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/FastShare");
+        v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/FileBandit");
         v.put(MediaStore.MediaColumns.IS_PENDING, 1);
         final Uri dest = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
         if (dest == null) throw new IOException("Cannot create a file in Downloads");
@@ -405,7 +426,7 @@ public final class ShareHub implements FileServer.Listener, FileServer.Backend {
                 try { resolver.delete(dest, null, null); } catch (Exception ignored) { }
             }
 
-            @Override public String location() { return "Downloads/FastShare"; }
+            @Override public String location() { return "Downloads/FileBandit"; }
         };
     }
 

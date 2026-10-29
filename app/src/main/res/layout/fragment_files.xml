@@ -165,6 +165,59 @@
                     android:orientation="vertical" />
 
                 <TextView
+                    android:id="@+id/favTitle"
+                    style="@style/FsSectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="FAVORITES"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/favGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:id="@+id/recentHeader"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:visibility="gone">
+
+                    <TextView
+                        style="@style/FsSectionTitle"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="RECENT FILES" />
+
+                    <TextView
+                        android:id="@+id/recentAll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:padding="6dp"
+                        android:text="See all"
+                        android:textColor="@color/fs_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/recentList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="-16dp"
+                    android:layout_marginEnd="-16dp"
+                    android:orientation="vertical" />
+
+                <TextView
                     style="@style/FsSectionTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -173,6 +226,20 @@
 
                 <LinearLayout
                     android:id="@+id/catGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    style="@style/FsSectionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="TOOLS" />
+
+                <LinearLayout
+                    android:id="@+id/toolsGrid"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
@@ -214,11 +281,11 @@
             android:visibility="gone">
 
             <ImageView
-                android:layout_width="64dp"
-                android:layout_height="64dp"
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:alpha="0.9"
                 android:importantForAccessibility="no"
-                android:src="@drawable/ic_folder"
-                app:tint="@color/fs_line" />
+                android:src="@drawable/mascot" />
 
             <TextView
                 android:id="@+id/emptyText"
@@ -242,13 +309,10 @@
             android:visibility="gone">
 
             <ImageView
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:background="@drawable/bg_card_soft"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
                 android:importantForAccessibility="no"
-                android:padding="20dp"
-                android:src="@drawable/ic_folder"
-                app:tint="@color/fs_primary" />
+                android:src="@drawable/mascot" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -264,7 +328,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:gravity="center"
-                android:text="To browse, copy, move and delete files, Android needs your OK once.\n\n1. Tap the button below\n2. Turn on &#8220;Allow access to manage all files&#8221;\n3. Come back to FastShare"
+                android:text="To browse, copy, move and delete files, Android needs your OK once.\n\n1. Tap the button below\n2. Turn on &#8220;Allow access to manage all files&#8221;\n3. Come back to FileBandit"
                 android:textColor="@color/fs_muted"
                 android:textSize="15sp" />
 

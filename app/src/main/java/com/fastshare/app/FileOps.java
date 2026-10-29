@@ -204,7 +204,7 @@ public final class FileOps {
                     out.add(Item.of(f));
                     if (out.size() >= limit) break;
                 }
-                if (isDir && !isSymlink(f)) queue.add(f);
+                if (isDir && !isSymlink(f) && !Trash.DIR_NAME.equals(f.getName())) queue.add(f);
             }
         }
         return out;
@@ -366,6 +366,11 @@ public final class FileOps {
         zipEntries(zos, dir, dir.getName(), buf);
         zos.finish();
         zos.flush();
+    }
+
+    /** Adds a file or folder to an open zip under {@code path}. */
+    public static void addToZip(ZipOutputStream zos, File f, String path) throws IOException {
+        zipEntries(zos, f, path, new byte[256 * 1024]);
     }
 
     private static void zipEntries(ZipOutputStream zos, File f, String path, byte[] buf) throws IOException {

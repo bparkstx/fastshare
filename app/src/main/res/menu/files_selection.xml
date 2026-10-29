@@ -5,9 +5,16 @@
     <item android:id="@+id/action_copy" android:icon="@drawable/ic_copy" android:title="Copy" app:showAsAction="always"/>
     <item android:id="@+id/action_cut" android:icon="@drawable/ic_cut" android:title="Move" app:showAsAction="always"/>
     <item android:id="@+id/action_delete" android:icon="@drawable/ic_delete" android:title="Delete" app:showAsAction="always"/>
+    <item android:id="@+id/action_delete_forever" android:title="Delete permanently" app:showAsAction="never"/>
     <item android:id="@+id/action_select_all" android:title="Select all" app:showAsAction="never"/>
+    <item android:id="@+id/action_invert" android:title="Invert selection" app:showAsAction="never"/>
+    <item android:id="@+id/action_select_type" android:title="Select by type..." app:showAsAction="never"/>
     <item android:id="@+id/action_share" android:title="Share with other apps" app:showAsAction="never"/>
-    <item android:id="@+id/action_rename" android:title="Rename" app:showAsAction="never"/>
+    <item android:id="@+id/action_favorite" android:title="Add to favorites" app:showAsAction="never"/>
+    <item android:id="@+id/action_upload_network" android:title="Upload to network location..." app:showAsAction="never"/>
+    <item android:id="@+id/action_vault" android:title="Move to private vault..." app:showAsAction="never"/>
+    <item android:id="@+id/action_compress" android:title="Compress to zip" app:showAsAction="never"/>
+    <item android:id="@+id/action_rename" android:title="Rename..." app:showAsAction="never"/>
     <item android:id="@+id/action_extract" android:title="Extract here" app:showAsAction="never"/>
     <item android:id="@+id/action_details" android:title="Details" app:showAsAction="never"/>
 </menu>

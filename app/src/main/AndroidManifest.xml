@@ -17,10 +17,16 @@
         tools:ignore="ScopedStorage" />
     <!-- Lets the file manager open .apk files to install them -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- App manager: list every installed app, and ask Android to uninstall one -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- usesCleartextTraffic: only for "WebDAV" (http://) locations the user adds by hand, on their own network -->
     <application
         android:name=".FastShareApp"
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.FastShare">
@@ -35,7 +41,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- "Share > FastShare" from any other app adds the files to the send list -->
+            <!-- "Share > FileBandit" from any other app adds the files to the send list -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -47,6 +53,42 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".TrashActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".VaultActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".NetworkActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".RemoteActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AppsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".StorageActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ViewerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
