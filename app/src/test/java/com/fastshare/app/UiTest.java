@@ -102,6 +102,9 @@ public class UiTest {
         Net.testOverride = null;
         Access.testOverride = null;
         FilesFragment.resetClipboard();
+        if (appsController != null) {
+            try { appsController.pause().stop().destroy(); } catch (Exception ignored) { }
+        }
         if (storageController != null) {
             try { storageController.pause().stop().destroy(); } catch (Exception ignored) { }
         }
@@ -1057,6 +1060,158 @@ public class UiTest {
         assertEquals("Storage", ((TextView) row.getChildAt(0).findViewById(R.id.tileLabel)).getText().toString());
         row.getChildAt(0).performClick();
         assertEquals(StorageActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
+    private ActivityController<AppsActivity> appsController;
+
+    private void installFake(String pkg, String label, String version, int apkBytes, boolean system, int... splitBytes) throws Exception {
+        File dir = new File(storage, "fake-apps/" + pkg);
+        dir.mkdirs();
+        File base = new File(dir, "base.apk");
+        java.nio.file.Files.write(base.toPath(), new byte[apkBytes]);
+        android.content.pm.PackageInfo pi = new android.content.pm.PackageInfo();
+        pi.packageName = pkg;
+        pi.versionName = version;
+        pi.firstInstallTime = 1_760_000_000_000L + apkBytes;
+        pi.lastUpdateTime = 1_761_000_000_000L - apkBytes;
+        android.content.pm.ApplicationInfo ai = new android.content.pm.ApplicationInfo();
+        ai.packageName = pkg;
+        ai.nonLocalizedLabel = label;
+        ai.sourceDir = base.getPath();
+        ai.flags = system ? android.content.pm.ApplicationInfo.FLAG_SYSTEM : 0;
+        if (splitBytes.length > 0) {
+            ai.splitSourceDirs = new String[splitBytes.length];
+            for (int i = 0; i < splitBytes.length; i++) {
+                File sp = new File(dir, "split_" + i + ".apk");
+                java.nio.file.Files.write(sp.toPath(), new byte[splitBytes[i]]);
+                ai.splitSourceDirs[i] = sp.getPath();
+            }
+        }
+        pi.applicationInfo = ai;
+        shadowOf(RuntimeEnvironment.getApplication().getPackageManager()).installPackage(pi);
+    }
+
+    private AppsActivity openApps() {
+        appsController = Robolectric.buildActivity(AppsActivity.class).setup();
+        AppsActivity a = appsController.get();
+        waitUntil(() -> ((RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter()).rows().size() > 0);
+        settle();
+        return a;
+    }
+
+    /** App names in the list, leaving out FileBandit itself (the test phone has it installed too). */
+    private static java.util.List<String> appTitles(AppsActivity a) {
+        java.util.List<String> out = new ArrayList<>();
+        for (RowAdapter.Row r : ((RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter()).rows()) {
+            if (!"FileBandit".equals(r.title)) out.add(r.title);
+        }
+        return out;
+    }
+
+    private static View appRow(AppsActivity a, String label) {
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        RecyclerView list = a.findViewById(R.id.list);
+        java.util.List<RowAdapter.Row> rows = ((RowAdapter) list.getAdapter()).rows();
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).title.equals(label)) return list.findViewHolderForAdapterPosition(i).itemView;
+        }
+        throw new AssertionError("no app row " + label);
+    }
+
+    @Test public void appsListUserAppsFirstAndCanShowSystemApps() throws Exception {
+        installFake("com.example.notes", "Notes", "1.4.2", 3_000_000, false);
+        installFake("com.example.camera", "Camera Pro", "9.0", 8_000_000, false);
+        installFake("com.android.settings", "Settings", "14", 1_000_000, true);
+        AppsActivity a = openApps();
+        assertEquals(java.util.Arrays.asList("Camera Pro", "Notes"), appTitles(a));        // A to Z, no system apps
+        String info = ((TextView) a.findViewById(R.id.info)).getText().toString();
+        assertTrue(info, info.startsWith("3 apps") && info.contains("system apps hidden"));   // Camera Pro, Notes and FileBandit
+        shotOf(a, "80_apps");
+
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_system, 0);
+        waitUntil(() -> appTitles(a).size() == 3);        // Settings joins the list
+        assertTrue(appTitles(a).contains("Settings"));
+    }
+
+    @Test public void appsCanBeSearchedAndSortedBySize() throws Exception {
+        installFake("com.example.alpha", "Alpha", "1", 1_000_000, false);
+        installFake("com.example.beta", "Beta", "1", 5_000_000, false);
+        installFake("com.example.gamma", "Gamma", "1", 3_000_000, false);
+        AppsActivity a = openApps();
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_sort, 0);
+        settle();
+        pressListItem(1);                                                              // biggest first
+        assertEquals(java.util.Arrays.asList("Beta", "Gamma", "Alpha"), appTitles(a));
+
+        tb.getMenu().performIdentifierAction(R.id.action_search, 0);
+        android.widget.EditText search = a.findViewById(R.id.searchInput);
+        assertEquals(View.VISIBLE, search.getVisibility());
+        search.setText("gam");
+        settle();
+        assertEquals(java.util.Collections.singletonList("Gamma"), appTitles(a));
+    }
+
+    @Test public void backingUpAnAppCopiesItsApk() throws Exception {
+        installFake("com.example.notes", "Notes", "1.4.2", 4096, false);
+        AppsActivity a = openApps();
+        appRow(a, "Notes").performClick();
+        settle();
+        pressListItem(1);                                                              // App info, Back up APK, Share APK, Uninstall (no launcher)
+        File backup = new File(storage, "FileBandit/Apps/Notes_1.4.2.apk");
+        waitUntil(backup::exists);
+        assertTrue("apk copied with a readable name", backup.exists());
+        assertEquals(4096, backup.length());
+    }
+
+    @Test public void splitAppsAreBackedUpAsAFolderWithEveryPart() throws Exception {
+        installFake("com.example.big", "Big App", "2.0", 5000, false, 1000, 2000);
+        AppsActivity a = openApps();
+        appRow(a, "Big App").performLongClick();                                        // select
+        settle();
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        assertEquals("1", tb.getTitle().toString());
+        tb.getMenu().performIdentifierAction(R.id.action_backup, 0);
+        File folder = new File(storage, "FileBandit/Apps/Big App_2.0");
+        waitUntil(() -> new File(folder, "split_1.apk").exists());
+        assertTrue(new File(folder, "base.apk").exists());
+        assertTrue(new File(folder, "split_0.apk").exists());
+        assertTrue(new File(folder, "split_1.apk").exists());
+    }
+
+    @Test public void backupNeedsFileAccess() throws Exception {
+        Access.testOverride = false;
+        installFake("com.example.notes", "Notes", "1", 100, false);
+        AppsActivity a = openApps();
+        appRow(a, "Notes").performLongClick();
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_backup, 0);
+        settle();
+        assertFalse(new File(storage, "FileBandit/Apps").exists());
+        assertEquals("Allow file access in the Files tab first, then try again.",
+                org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
+    }
+
+    @Test public void uninstallAsksAndroidToDoIt() throws Exception {
+        installFake("com.example.notes", "Notes", "1", 100, false);
+        AppsActivity a = openApps();
+        appRow(a, "Notes").performClick();
+        settle();
+        pressListItem(3);                                                              // Uninstall
+        android.content.Intent i = shadowOf(a).getNextStartedActivity();
+        assertEquals(android.content.Intent.ACTION_DELETE, i.getAction());
+        assertEquals("package:com.example.notes", i.getData().toString());
+    }
+
+    @Test public void appsTileOnHomeOpensTheManager() throws Exception {
+        launch();
+        android.view.ViewGroup row = (android.view.ViewGroup) ((android.widget.LinearLayout) files().getView().findViewById(R.id.toolsGrid)).getChildAt(0);
+        assertEquals("Apps", ((TextView) row.getChildAt(1).findViewById(R.id.tileLabel)).getText().toString());
+        row.getChildAt(1).performClick();
+        assertEquals(AppsActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
     }
 
     @Test public void searchFindsFilesInSubfolders() throws Exception {

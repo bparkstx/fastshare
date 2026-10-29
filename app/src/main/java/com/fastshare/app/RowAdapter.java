@@ -32,6 +32,7 @@ final class RowAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         int color;                // 0 = pick from kind
         FileOps.Kind kind = FileOps.Kind.OTHER;
         File thumb;               // show a photo/video preview when set
+        android.graphics.drawable.Drawable drawable;   // a ready-made picture, such as an app icon
         Object tag;
 
         private Row(String id, boolean header) {
@@ -62,6 +63,11 @@ final class RowAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         Row icon(int icon, int color) {
             this.icon = icon;
             this.color = color;
+            return this;
+        }
+
+        Row drawable(android.graphics.drawable.Drawable d) {
+            this.drawable = d;
             return this;
         }
 
@@ -145,6 +151,12 @@ final class RowAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             h.icon.setBackground(Kinds.solid(ContextCompat.getColor(ctx, R.color.fs_primary), radius));
             h.icon.setImageResource(R.drawable.ic_check);
             h.icon.setColorFilter(ContextCompat.getColor(ctx, R.color.fs_on_primary));
+        } else if (row.drawable != null) {
+            h.icon.setBackground(null);
+            h.icon.setPadding(0, 0, 0, 0);
+            h.icon.setColorFilter(null);
+            h.icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            h.icon.setImageDrawable(row.drawable);
         } else {
             h.icon.setBackground(Kinds.badge(color, radius, false));
             h.icon.setImageResource(row.icon);
