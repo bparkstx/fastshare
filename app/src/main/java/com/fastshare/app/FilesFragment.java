@@ -529,6 +529,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
                 (Runnable) () -> startActivity(new Intent(requireContext(), BackupActivity.class))});
         toolTiles.add(new Object[]{"Clean photos", R.drawable.ic_image, ContextCompat.getColor(requireContext(), R.color.kind_video),
                 (Runnable) () -> startActivity(new Intent(requireContext(), SwipeCleanActivity.class))});
+        toolTiles.add(new Object[]{"Scan", R.drawable.ic_doc, ContextCompat.getColor(requireContext(), R.color.kind_document),
+                (Runnable) () -> startActivity(new Intent(requireContext(), ScanActivity.class))});
         fillGrid(tools, toolTiles, 4);
 
         LinearLayout vols = v.findViewById(R.id.volumes);

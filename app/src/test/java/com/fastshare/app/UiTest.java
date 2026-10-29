@@ -2916,6 +2916,208 @@ public class UiTest {
         assertTrue(((TextView) a.findViewById(R.id.sIntro)).getText().toString().contains("Allow file access"));
     }
 
+    // ------------------------------------------------------------------ document scanner
+
+    private ActivityController<ScanActivity> scanController;
+
+    @After
+    public void tearDownScan() {
+        if (scanController != null) {
+            try { scanController.pause().stop().destroy(); } catch (Exception ignored) { }
+            scanController = null;
+        }
+    }
+
+    private File photoOfAPage(String name, long seed) throws Exception {
+        DocScan.Img img = DocScanTest.photo(800, 600, DocScanTest.PX, DocScanTest.PY, true, seed);
+        Bitmap b = Bitmap.createBitmap(img.px, img.w, img.h, Bitmap.Config.ARGB_8888);
+        File f = new File(storage.getParentFile(), name);
+        try (FileOutputStream os = new FileOutputStream(f)) { b.compress(Bitmap.CompressFormat.PNG, 100, os); }
+        return f;
+    }
+
+    private ScanActivity openScan() {
+        scanController = Robolectric.buildActivity(ScanActivity.class).setup();
+        ScanActivity a = scanController.get();
+        settle();
+        return a;
+    }
+
+    private void addPage(ScanActivity a, File photo) {
+        int before = a.pageCount();
+        a.addFromFile(photo);
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        a.findViewById(R.id.cropDone).performClick();
+        waitUntil(() -> a.pageCount() == before + 1 && a.currentPreview() != null);
+        settle();
+    }
+
+    @Test public void scannerStartsWithTwoWaysToGetAPhoto() throws Exception {
+        ScanActivity a = openScan();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.emptyBox).getVisibility());
+        assertEquals(View.GONE, a.findViewById(R.id.pagesBox).getVisibility());
+        shotOf(a, "160_scan_empty");
+        a.findViewById(R.id.eGallery).performClick();
+        android.content.Intent pick = shadowOf(a).getNextStartedActivityForResult().intent;
+        assertEquals(android.content.Intent.ACTION_GET_CONTENT, pick.getAction());
+        assertEquals("image/*", pick.getType());
+        a.findViewById(R.id.eCamera).performClick();
+        android.content.Intent cam = shadowOf(a).getNextStartedActivityForResult().intent;
+        assertEquals(android.provider.MediaStore.ACTION_IMAGE_CAPTURE, cam.getAction());
+        android.net.Uri out = cam.getParcelableExtra(android.provider.MediaStore.EXTRA_OUTPUT);
+        assertNotNull("the camera app is told where to put the photo", out);
+        assertTrue(out.toString(), out.toString().contains(a.getPackageName() + ".fileprovider"));
+    }
+
+    @Test public void aPhotoOfAPageIsFoundStraightenedAndCleaned() throws Exception {
+        ScanActivity a = openScan();
+        a.addFromFile(photoOfAPage("page1.png", 1));
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        CropView cv = a.findViewById(R.id.cropView);
+        DocScan.Quad q = cv.getQuad();
+        for (int i = 0; i < 4; i++) {
+            double d = Math.hypot(q.x[i] - DocScanTest.PX[i], q.y[i] - DocScanTest.PY[i]);
+            assertTrue("corner " + i + " found within " + d, d < 30);
+        }
+        shotOf(a, "161_scan_crop");
+
+        // corners that cross over aren't accepted
+        float[] c2 = cv.cornerOnScreen(2);
+        cv.moveTo(0, c2[0], c2[1]);
+        a.findViewById(R.id.cropDone).performClick();
+        assertEquals("still cropping", View.VISIBLE, a.findViewById(R.id.cropBox).getVisibility());
+        cv.setQuad(q);
+        a.findViewById(R.id.cropDone).performClick();
+        waitUntil(() -> a.pageCount() == 1 && a.currentPreview() != null);
+        settle();
+        assertEquals(View.VISIBLE, a.findViewById(R.id.pagesBox).getVisibility());
+        assertEquals("Page 1 of 1", ((TextView) a.findViewById(R.id.pageInfo)).getText().toString());
+        Bitmap prev = a.currentPreview();
+        double expectedRatio = Math.max(Math.hypot(DocScanTest.PX[0] - DocScanTest.PX[3], DocScanTest.PY[0] - DocScanTest.PY[3]),
+                Math.hypot(DocScanTest.PX[1] - DocScanTest.PX[2], DocScanTest.PY[1] - DocScanTest.PY[2]))
+                / Math.max(Math.hypot(DocScanTest.PX[0] - DocScanTest.PX[1], DocScanTest.PY[0] - DocScanTest.PY[1]),
+                Math.hypot(DocScanTest.PX[3] - DocScanTest.PX[2], DocScanTest.PY[3] - DocScanTest.PY[2]));
+        assertEquals("page shape is right", expectedRatio, prev.getHeight() / (double) prev.getWidth(), 0.06);
+        int gap = prev.getPixel((int) (prev.getWidth() * 0.85), (int) (prev.getHeight() * (0.12 + 0.065)));
+        assertTrue("paper comes out white: " + Integer.toHexString(gap), (gap & 0xFF) > 220 && ((gap >> 16) & 0xFF) > 220);
+        shotOf(a, "162_scan_page");
+
+        // looks
+        a.findViewById(R.id.lookBw).performClick();
+        waitUntil(() -> { Bitmap b = a.currentPreview(); return b != prev; });
+        settle();
+        Bitmap bw = a.currentPreview();
+        int sample = bw.getPixel(bw.getWidth() / 2, bw.getHeight() / 2);
+        assertTrue("black and white only: " + Integer.toHexString(sample), (sample & 0xFFFFFF) == 0 || (sample & 0xFFFFFF) == 0xFFFFFF);
+        // turning swaps the sides
+        int w0 = bw.getWidth(), h0 = bw.getHeight();
+        a.findViewById(R.id.aRotate).performClick();
+        waitUntil(() -> a.currentPreview() != bw);
+        settle();
+        assertEquals(h0, a.currentPreview().getWidth());
+        assertEquals(w0, a.currentPreview().getHeight());
+    }
+
+    @Test public void severalPagesBecomeOnePdfThatARealReaderOpens() throws Exception {
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("p1.png", 11));
+        addPage(a, photoOfAPage("p2.png", 12));
+        addPage(a, photoOfAPage("p3.png", 13));
+        assertEquals(3, a.pageCount());
+        assertEquals("Page 3 of 3", ((TextView) a.findViewById(R.id.pageInfo)).getText().toString());
+        assertEquals(3, ((RecyclerView) a.findViewById(R.id.thumbs)).getAdapter().getItemCount());
+        // drop the middle one
+        ((RecyclerView) a.findViewById(R.id.thumbs)).getAdapter();
+        a.findViewById(R.id.aDelete).performClick();
+        settle();
+        assertEquals(2, a.pageCount());
+
+        a.findViewById(R.id.aSave).performClick();
+        waitUntil(() -> a.lastSaved != null);
+        settle();
+        File pdf = a.lastSaved;
+        assertNotNull(pdf);
+        assertEquals(new File(storage, "Documents/FileBandit Scans").getPath(), pdf.getParent());
+        assertTrue(pdf.getName(), pdf.getName().startsWith("Scan 20") && pdf.getName().endsWith(".pdf"));
+        byte[] bytes = Files.readAllBytes(pdf.toPath());
+        assertTrue(new String(bytes, 0, 8, StandardCharsets.ISO_8859_1).startsWith("%PDF-1.4"));
+        assertTrue("two pages' worth of pictures: " + bytes.length, bytes.length > 20_000);
+        assertEquals("the scanner is empty again", 0, a.pageCount());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.emptyBox).getVisibility());
+        if (new File("/usr/bin/pdfinfo").canExecute()) {
+            Process p = new ProcessBuilder("/usr/bin/pdfinfo", pdf.getPath()).redirectErrorStream(true).start();
+            String info = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).replaceAll("\\s+", " ");
+            p.waitFor();
+            assertTrue(info, info.contains("Pages: 2"));
+        }
+        View snack = a.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_text);
+        assertNotNull(snack);
+        assertTrue(((TextView) snack).getText().toString(), ((TextView) snack).getText().toString().contains("Saved 2 pages as Scan"));
+        shotOf(a, "163_scan_saved");
+    }
+
+    @Test public void adjustingEdgesLeavingAndNeedingFileAccess() throws Exception {
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("e1.png", 21));
+        a.findViewById(R.id.aEdges).performClick();
+        waitUntil(() -> a.findViewById(R.id.cropBox).getVisibility() == View.VISIBLE);
+        settle();
+        CropView cv = a.findViewById(R.id.cropView);
+        DocScan.Quad q = cv.getQuad();
+        assertTrue("the editor opens on the page's current corners", Math.hypot(q.x[0] - DocScanTest.PX[0], q.y[0] - DocScanTest.PX[0] * 0 - DocScanTest.PY[0]) < 30);
+        a.findViewById(R.id.cropCancel).performClick();
+        assertEquals(View.GONE, a.findViewById(R.id.cropBox).getVisibility());
+        assertEquals("cancelling keeps the page", 1, a.pageCount());
+
+        // going back with an unsaved scan asks first
+        a.getOnBackPressedDispatcher().onBackPressed();
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull(d);
+        assertTrue(d.isShowing());
+        d.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();           // keep scanning
+        settle();
+        assertFalse(a.isFinishing());
+        a.getOnBackPressedDispatcher().onBackPressed();
+        settle();
+        ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertTrue(a.isFinishing());
+    }
+
+    @Test public void withoutFileAccessTheSavedPdfStaysInTheCacheAndSaysSo() throws Exception {
+        Access.testOverride = false;
+        ScanActivity a = openScan();
+        addPage(a, photoOfAPage("n1.png", 31));
+        a.findViewById(R.id.aSave).performClick();
+        waitUntil(() -> a.lastSaved != null);
+        settle();
+        assertTrue(a.lastSaved.getPath().startsWith(a.getCacheDir().getPath()));
+        View snack = a.getWindow().getDecorView().findViewById(com.google.android.material.R.id.snackbar_text);
+        assertTrue(((TextView) snack).getText().toString().contains("allow file access"));
+    }
+
+    @Test public void scanTileOnTheHomeScreenOpensTheScanner() throws Exception {
+        launch();
+        android.view.ViewGroup tools = files().getView().findViewById(R.id.toolsGrid);
+        boolean found = false;
+        for (int r = 0; r < tools.getChildCount(); r++) {
+            android.view.ViewGroup row = (android.view.ViewGroup) tools.getChildAt(r);
+            for (int i = 0; i < row.getChildCount(); i++) {
+                View tile = row.getChildAt(i);
+                TextView label = tile.findViewById(R.id.tileLabel);
+                if (label != null && "Scan".equals(label.getText().toString())) {
+                    tile.performClick();
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found);
+        assertEquals(ScanActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);

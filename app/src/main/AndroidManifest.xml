@@ -83,6 +83,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ScanActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".HistoryActivity"
             android:exported="false" />
         <activity
