@@ -79,6 +79,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".SwipeCleanActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".HistoryActivity"
             android:exported="false" />
         <activity

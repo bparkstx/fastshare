@@ -2719,6 +2719,203 @@ public class UiTest {
         assertEquals(0, VaultSession.intruders(a).list().size());
     }
 
+    // ------------------------------------------------------------------ swipe to clean
+
+    /** A real picture file: soft gradient, rectangles and grain, so the cleaner has something to look at. */
+    private File picture(String rel, long seed, int w, int h, int blurDown, long modified, boolean dark) throws Exception {
+        return picture(rel, seed, w, h, blurDown, modified, dark, w);
+    }
+
+    /** {@code outW} saves a smaller copy of the same scene (the scene itself is always drawn at w x h). */
+    private File picture(String rel, long seed, int w, int h, int blurDown, long modified, boolean dark, int outW) throws Exception {
+        File f = new File(storage, rel);
+        f.getParentFile().mkdirs();
+        Bitmap bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bm);
+        if (dark) {
+            c.drawColor(0xFF010101);
+        } else {
+            java.util.Random r = new java.util.Random(seed);
+            android.graphics.Paint p = new android.graphics.Paint();
+            c.drawColor(android.graphics.Color.rgb(60 + r.nextInt(60), 90 + r.nextInt(80), 120 + r.nextInt(100)));
+            for (int i = 0; i < 16; i++) {
+                p.setColor(android.graphics.Color.rgb(r.nextInt(256), r.nextInt(256), r.nextInt(256)));
+                int x = r.nextInt(w - 20), y = r.nextInt(h - 20);
+                c.drawRect(x, y, x + 10 + r.nextInt(w / 3), y + 10 + r.nextInt(h / 3), p);
+            }
+            java.util.Random grain = new java.util.Random(seed * 17);
+            p.setStrokeWidth(1);
+            for (int i = 0; i < w * h / 6; i++) {
+                int v = 100 + grain.nextInt(120);
+                p.setColor(android.graphics.Color.argb(70, v, v, v));
+                c.drawPoint(grain.nextInt(w), grain.nextInt(h), p);
+            }
+        }
+        if (blurDown > 1) {
+            Bitmap small = Bitmap.createScaledBitmap(bm, Math.max(2, w / blurDown), Math.max(2, h / blurDown), true);
+            bm = Bitmap.createScaledBitmap(small, w, h, true);
+        }
+        if (outW != w) bm = Bitmap.createScaledBitmap(bm, outW, h * outW / w, true);
+        try (FileOutputStream os = new FileOutputStream(f)) {
+            // the test runtime can write JPEG but not read it back, so the content is PNG; the decoder goes by content, not by name
+            bm.compress(Bitmap.CompressFormat.PNG, 100, os);
+        }
+        assertTrue(f.setLastModified(modified));
+        return f;
+    }
+
+    private ActivityController<SwipeCleanActivity> cleanController;
+
+    private long hoursAgo(int h) {
+        return System.currentTimeMillis() - h * 3600_000L;
+    }
+
+    private void makePhotoLibrary() throws Exception {
+        picture("DCIM/Camera/IMG_A.jpg", 1, 640, 480, 1, hoursAgo(50), false);
+        picture("DCIM/Camera/IMG_A_copy.jpg", 1, 640, 480, 1, hoursAgo(49), false, 320);     // same scene, smaller
+        picture("DCIM/Camera/IMG_B.jpg", 2, 640, 480, 1, hoursAgo(40), false);
+        picture("DCIM/Camera/IMG_BLUR.jpg", 3, 640, 480, 24, hoursAgo(30), false);
+        picture("DCIM/Camera/IMG_BLACK.jpg", 4, 640, 480, 1, hoursAgo(20), true);
+        picture("Pictures/Screenshots/Screenshot_old.png", 5, 540, 1170, 1, System.currentTimeMillis() - 200L * 24 * 3600_000, false);
+    }
+
+    private SwipeCleanActivity openClean() {
+        cleanController = Robolectric.buildActivity(SwipeCleanActivity.class).setup();
+        SwipeCleanActivity a = cleanController.get();
+        waitUntil(() -> ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildCount() == 4);
+        settle();
+        return a;
+    }
+
+    private static String rowSub(android.app.Activity a, int row) {
+        return ((TextView) ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildAt(row).findViewById(R.id.cSub)).getText().toString();
+    }
+
+    private static void review(android.app.Activity a, int row) {
+        ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildAt(row).findViewById(R.id.cReview).performClick();
+        settle();
+    }
+
+    @After
+    public void tearDownClean() {
+        if (cleanController != null) {
+            try { cleanController.pause().stop().destroy(); } catch (Exception ignored) { }
+            cleanController = null;
+        }
+    }
+
+    @Test public void photoCleanerFindsCopiesBlurBlackFramesAndOldScreenshotsInRealPictures() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        assertTrue(rowSub(a, 0), rowSub(a, 0).startsWith("1 photo"));            // near-copies: the smaller copy
+        assertTrue(rowSub(a, 1), rowSub(a, 1).startsWith("1 photo"));            // blurry
+        assertTrue(rowSub(a, 2), rowSub(a, 2).startsWith("1 photo"));            // black
+        assertTrue(rowSub(a, 3), rowSub(a, 3).startsWith("1 photo"));            // old screenshot
+        String intro = ((TextView) a.findViewById(R.id.sIntro)).getText().toString();
+        assertTrue(intro, intro.startsWith("Looked at 6 photos"));
+        shotOf(a, "150_clean_summary");
+
+        review(a, 0);
+        assertEquals(View.VISIBLE, a.findViewById(R.id.reviewBox).getVisibility());
+        assertEquals("1 of 1", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        String info = ((TextView) a.findViewById(R.id.rInfo)).getText().toString();
+        assertTrue(info, info.contains("IMG_A_copy.jpg") && info.contains("IMG_A.jpg, which is the better one"));
+        assertEquals(View.VISIBLE, a.findViewById(R.id.rBest).getVisibility());
+        waitUntil(() -> ((android.widget.ImageView) a.findViewById(R.id.rImage)).getDrawable() != null);
+        settle();
+        shotOf(a, "151_clean_card");
+    }
+
+    @Test public void trashingKeepingAndUndoingWorkAndKeptPhotosAreNotSuggestedAgain() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        File copy = new File(storage, "DCIM/Camera/IMG_A_copy.jpg");
+        File blur = new File(storage, "DCIM/Camera/IMG_BLUR.jpg");
+
+        review(a, 0);
+        a.findViewById(R.id.rTrash).performClick();
+        settle();
+        assertFalse("moved to the Trash", copy.exists());
+        assertTrue("the better one stays", new File(storage, "DCIM/Camera/IMG_A.jpg").exists());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.summaryBox).getVisibility());
+        assertEquals("None found", rowSub(a, 0));
+        assertTrue(((TextView) a.findViewById(R.id.sTrashed)).getText().toString().startsWith("Moved to the Trash so far: 1 photo"));
+        assertEquals(1, new Trash(storage).list().size());
+
+        // undo from the next review: go into blurry, keep it, then undo the keep
+        review(a, 1);
+        a.findViewById(R.id.rKeep).performClick();
+        settle();
+        assertTrue(blur.exists());
+        assertEquals(1, new Prefs(a).cleanKept().size());
+        assertEquals("None found", rowSub(a, 1));
+
+        // scanning again doesn't bring the kept photo back
+        a.findViewById(R.id.sRescan).performClick();
+        waitUntil(() -> ((android.widget.LinearLayout) a.findViewById(R.id.sResults)).getChildCount() == 4);
+        settle();
+        assertEquals("None found", rowSub(a, 1));
+        assertEquals("None found", rowSub(a, 0));
+    }
+
+    @Test public void undoPutsATrashedPhotoBackWhereItWas() throws Exception {
+        makePhotoLibrary();
+        SwipeCleanActivity a = openClean();
+        File shot = new File(storage, "Pictures/Screenshots/Screenshot_old.png");
+        long size = shot.length();
+        review(a, 3);
+        assertFalse(a.findViewById(R.id.rUndo).isEnabled());
+        a.findViewById(R.id.rTrash).performClick();
+        settle();
+        assertFalse(shot.exists());
+        // the review ended (it was the only one), so open the blurry group, which has an Undo that reaches the last decision
+        review(a, 1);
+        assertTrue(a.findViewById(R.id.rUndo).isEnabled());
+        a.findViewById(R.id.rUndo).performClick();
+        settle();
+        assertTrue("restored", shot.exists());
+        assertEquals(size, shot.length());
+        assertEquals(0, new Trash(storage).list().size());
+    }
+
+    @Test public void swipingLeftTrashesAndSwipingRightKeeps() throws Exception {
+        makePhotoLibrary();
+        picture("DCIM/Camera/IMG_BLUR2.jpg", 6, 640, 480, 24, hoursAgo(29), false);
+        SwipeCleanActivity a = openClean();
+        review(a, 1);
+        assertEquals("1 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        View card = a.findViewById(R.id.rImage);
+        layoutOf(a);
+        android.os.SystemClock.setCurrentTimeMillis(android.os.SystemClock.uptimeMillis());
+        float w = card.getWidth();
+        long t = android.os.SystemClock.uptimeMillis();
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, 500f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_MOVE, 500f - w * 0.45f, 500f, 0));
+        assertTrue("the TRASH stamp fades in", a.findViewById(R.id.rStampTrash).getAlpha() > 0.9f);
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 100, android.view.MotionEvent.ACTION_UP, 500f - w * 0.45f, 500f, 0));
+        waitUntil(() -> "2 of 2".equals(((TextView) a.findViewById(R.id.rTitle)).getText().toString()));
+        settle();
+        assertEquals("2 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        assertEquals(1, new Trash(storage).list().size());
+
+        // a short drag springs back and decides nothing
+        t = android.os.SystemClock.uptimeMillis();
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, 500f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_MOVE, 500f + w * 0.1f, 500f, 0));
+        card.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 100, android.view.MotionEvent.ACTION_UP, 500f + w * 0.1f, 500f, 0));
+        settle();
+        assertEquals("2 of 2", ((TextView) a.findViewById(R.id.rTitle)).getText().toString());
+        assertEquals(1, new Trash(storage).list().size());
+    }
+
+    @Test public void cleanerNeedsFileAccess() throws Exception {
+        Access.testOverride = false;
+        cleanController = Robolectric.buildActivity(SwipeCleanActivity.class).setup();
+        SwipeCleanActivity a = cleanController.get();
+        settle();
+        assertTrue(((TextView) a.findViewById(R.id.sIntro)).getText().toString().contains("Allow file access"));
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);

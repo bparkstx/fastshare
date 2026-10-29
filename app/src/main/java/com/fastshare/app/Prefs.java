@@ -146,4 +146,15 @@ final class Prefs {
     String backupLast() { return sp.getString("backupLast", ""); }
     long backupLastTime() { return sp.getLong("backupLastTime", 0); }
     void setBackupLast(String text, long time) { sp.edit().putString("backupLast", text).putLong("backupLastTime", time).apply(); }
+
+    // ------------------------------------------------------------------ photo cleaner
+
+    /** Photos the person chose to keep, so they aren't suggested again. */
+    java.util.Set<String> cleanKept() {
+        return new java.util.HashSet<>(sp.getStringSet("cleanKept", new java.util.HashSet<String>()));
+    }
+
+    void setCleanKept(java.util.Set<String> keys) {
+        sp.edit().putStringSet("cleanKept", new java.util.HashSet<>(keys)).apply();
+    }
 }
