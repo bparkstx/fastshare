@@ -31,9 +31,11 @@ jobs:
           SIGNING_KEY: ${{ secrets.FASTSHARE_SIGNING_KEY }}
         run: |
           if [ -n "$SIGNING_KEY" ]; then
+            PASSWORD=$(echo "$SIGNING_KEY" | cut -d: -f1)
+            echo "::add-mask::$PASSWORD"   # mask it before it can show up in any later step's log
             echo "$SIGNING_KEY" | cut -d: -f2- | base64 -d > "$RUNNER_TEMP/fastshare.p12"
             echo "FASTSHARE_KEYSTORE=$RUNNER_TEMP/fastshare.p12" >> "$GITHUB_ENV"
-            echo "FASTSHARE_KEYSTORE_PASSWORD=$(echo "$SIGNING_KEY" | cut -d: -f1)" >> "$GITHUB_ENV"
+            echo "FASTSHARE_KEYSTORE_PASSWORD=$PASSWORD" >> "$GITHUB_ENV"
             echo "Signing with the FastShare key"
           else
             echo "::warning::No FASTSHARE_SIGNING_KEY secret, signing with a temporary debug key"
