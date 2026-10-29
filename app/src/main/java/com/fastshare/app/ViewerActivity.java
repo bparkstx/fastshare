@@ -50,6 +50,7 @@ import java.util.concurrent.Executors;
 public class ViewerActivity extends AppCompatActivity {
 
     static final String EXTRA_PATH = "path";
+    static final String EXTRA_SECURE = "secure";
     private static final long MAX_TEXT_BYTES = 1_500_000;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -85,6 +86,10 @@ public class ViewerActivity extends AppCompatActivity {
             else Toast.makeText(this, "That file isn't there any more", Toast.LENGTH_SHORT).show();
             finish();
             return;
+        }
+        boolean secure = getIntent().getBooleanExtra(EXTRA_SECURE, false);
+        if (secure) {
+            getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE);
         }
         setContentView(R.layout.activity_viewer);
         mediaBar = findViewById(R.id.mediaBar);

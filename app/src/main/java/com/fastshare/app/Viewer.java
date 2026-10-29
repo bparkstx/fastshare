@@ -35,6 +35,15 @@ final class Viewer {
         return null;
     }
 
+    /** Opens a decrypted vault file: the viewer blocks screenshots and never hands the file to another app. */
+    static void openSecure(Activity a, File f) {
+        if (typeOf(f) == null) return;
+        sessionFiles = new ArrayList<>();
+        sessionFiles.add(f);
+        a.startActivity(new Intent(a, ViewerActivity.class).putExtra(ViewerActivity.EXTRA_PATH, f.getPath())
+                .putExtra(ViewerActivity.EXTRA_SECURE, true));
+    }
+
     /** Opens the built-in viewer, or another app if FileBandit can't show this kind of file. */
     static void open(Activity a, File f, List<File> neighbours) {
         if (typeOf(f) == null) {

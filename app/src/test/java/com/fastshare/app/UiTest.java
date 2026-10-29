@@ -1209,8 +1209,8 @@ public class UiTest {
     @Test public void appsTileOnHomeOpensTheManager() throws Exception {
         launch();
         android.view.ViewGroup row = (android.view.ViewGroup) ((android.widget.LinearLayout) files().getView().findViewById(R.id.toolsGrid)).getChildAt(0);
-        assertEquals("Apps", ((TextView) row.getChildAt(1).findViewById(R.id.tileLabel)).getText().toString());
-        row.getChildAt(1).performClick();
+        assertEquals("Apps", ((TextView) row.getChildAt(2).findViewById(R.id.tileLabel)).getText().toString());
+        row.getChildAt(2).performClick();
         assertEquals(AppsActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
     }
 
@@ -1434,6 +1434,222 @@ public class UiTest {
         shot("21_dark_selection");
         selectTab(R.id.nav_transfer);
         shotScrollContent("22_dark_transfer", transfer().getView());
+    }
+
+    // ------------------------------------------------------------------ private vault
+
+    private ActivityController<VaultActivity> vaultController;
+    private File vaultDir;
+
+    private VaultActivity openVault() {
+        if (VaultSession.testVault == null) {
+            vaultDir = new File(storage.getParentFile(), "vault-test-" + System.nanoTime());
+            VaultSession.testVault = new Vault(vaultDir, Vault.NO_OUTER, 1000);
+        }
+        vaultController = Robolectric.buildActivity(VaultActivity.class).setup();
+        VaultActivity a = vaultController.get();
+        settle();
+        return a;
+    }
+
+    private void type(VaultActivity a, int id, String text) {
+        ((android.widget.EditText) a.findViewById(id)).setText(text);
+    }
+
+    private void tapAuth(VaultActivity a) {
+        a.findViewById(R.id.authButton).performClick();
+        waitUntil(() -> a.findViewById(R.id.busy).getVisibility() != View.VISIBLE);
+        settle();
+    }
+
+    private static String authError(VaultActivity a) {
+        View e = a.findViewById(R.id.authError);
+        return e.getVisibility() == View.VISIBLE ? ((TextView) e).getText().toString() : null;
+    }
+
+    private static java.util.List<String> vaultRows(VaultActivity a) {
+        RowAdapter ra = (RowAdapter) ((RecyclerView) a.findViewById(R.id.list)).getAdapter();
+        java.util.List<String> out = new ArrayList<>();
+        for (RowAdapter.Row r : ra.rows()) out.add(r.title);
+        return out;
+    }
+
+    private void createVault(VaultActivity a, String pin) {
+        type(a, R.id.pinInput, pin);
+        type(a, R.id.pinConfirm, pin);
+        tapAuth(a);
+    }
+
+    @After
+    public void tearDownVault() {
+        if (vaultController != null) {
+            try { vaultController.pause().stop().destroy(); } catch (Exception ignored) { }
+            vaultController = null;
+        }
+        VaultSession.testVault = null;
+        VaultSession.pending.clear();
+        if (vaultDir != null) FileOps.delete(vaultDir);
+        vaultDir = null;
+    }
+
+    @Test public void vaultSetupChecksThePinAndThenOpens() throws Exception {
+        VaultActivity a = openVault();
+        assertEquals("Create your private vault", ((TextView) a.findViewById(R.id.authTitle)).getText().toString());
+        assertTrue("the window is protected from screenshots",
+                (a.getWindow().getAttributes().flags & android.view.WindowManager.LayoutParams.FLAG_SECURE) != 0);
+        shotOf(a, "80_vault_setup");
+
+        type(a, R.id.pinInput, "12");
+        type(a, R.id.pinConfirm, "12");
+        tapAuth(a);
+        assertTrue(authError(a), authError(a).contains("at least"));
+
+        type(a, R.id.pinInput, "2468");
+        type(a, R.id.pinConfirm, "2469");
+        tapAuth(a);
+        assertTrue(authError(a), authError(a).contains("don't match"));
+        assertFalse(VaultSession.get(a).exists());
+
+        type(a, R.id.pinInput, "2468");
+        type(a, R.id.pinConfirm, "2468");
+        tapAuth(a);
+        assertTrue(VaultSession.get(a).exists());
+        assertTrue(VaultSession.get(a).isUnlocked());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.listBox).getVisibility());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+        shotOf(a, "81_vault_empty");
+    }
+
+    @Test public void vaultLocksAndOnlyTheRightPinOpensIt() throws Exception {
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        tb.getMenu().performIdentifierAction(R.id.action_lock, 0);
+        settle();
+        assertFalse(VaultSession.get(a).isUnlocked());
+        assertEquals("Vault locked", ((TextView) a.findViewById(R.id.authTitle)).getText().toString());
+        assertEquals(View.GONE, a.findViewById(R.id.bioButton).getVisibility());
+        assertEquals(View.GONE, a.findViewById(R.id.listBox).getVisibility());
+        shotOf(a, "82_vault_locked");
+
+        type(a, R.id.pinInput, "0000");
+        tapAuth(a);
+        assertTrue(authError(a), authError(a).contains("isn't right"));
+        assertFalse(VaultSession.get(a).isUnlocked());
+        assertEquals("the box is cleared after a miss", "", ((android.widget.EditText) a.findViewById(R.id.pinInput)).getText().toString());
+        shotOf(a, "83_vault_wrong_pin");
+
+        type(a, R.id.pinInput, "2468");
+        tapAuth(a);
+        assertTrue(VaultSession.get(a).isUnlocked());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.listBox).getVisibility());
+    }
+
+    @Test public void filesPickedInTheFilesTabMoveIntoTheVaultAndLeaveNoOriginal() throws Exception {
+        File notes = new File(storage, "Download/notes.txt");
+        File inner = new File(storage, "Download/Old stuff/a.txt");
+        VaultSession.pending.add(notes);
+        VaultSession.pending.add(new File(storage, "Download/Old stuff"));
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        waitUntil(() -> vaultRows(a).size() == 2);
+        settle();
+        java.util.List<String> rows = vaultRows(a);
+        assertTrue(rows.toString(), rows.contains("notes.txt"));
+        assertTrue(rows.toString(), rows.contains("Old stuff/a.txt"));
+        assertFalse("original file is gone once it is safely inside", notes.exists());
+        assertFalse(inner.exists());
+        assertFalse("the emptied folder is removed too", new File(storage, "Download/Old stuff").exists());
+        assertTrue(VaultSession.pending.isEmpty());
+        // nothing readable is left lying around in the vault folder
+        for (File f : vaultDir.listFiles()) assertFalse(f.getName(), f.getName().contains("notes"));
+        shotOf(a, "84_vault_with_files");
+    }
+
+    @Test public void vaultItemsCanBeSelectedExportedAndDeleted() throws Exception {
+        VaultSession.pending.add(new File(storage, "Download/notes.txt"));
+        VaultSession.pending.add(new File(storage, "Download/photos.zip"));
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        waitUntil(() -> vaultRows(a).size() == 2);
+        settle();
+
+        RecyclerView list = a.findViewById(R.id.list);
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        int notesRow = vaultRows(a).indexOf("notes.txt");
+        list.findViewHolderForAdapterPosition(notesRow).itemView.performLongClick();
+        settle();
+        MaterialToolbar tb = a.findViewById(R.id.toolbar);
+        assertEquals("1", tb.getTitle().toString());
+        shotOf(a, "85_vault_selected");
+
+        tb.getMenu().performIdentifierAction(R.id.action_export, 0);
+        waitUntil(() -> new File(VaultActivity.restoreDir(), "notes.txt").exists());
+        settle();
+        assertTrue(new File(VaultActivity.restoreDir(), "notes.txt").exists());
+        assertEquals(1_200, new File(VaultActivity.restoreDir(), "notes.txt").length());
+        assertEquals("exported file leaves the vault", java.util.Arrays.asList("photos.zip"), vaultRows(a));
+
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        list.findViewHolderForAdapterPosition(0).itemView.performLongClick();
+        settle();
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(R.id.action_delete, 0);
+        settle();
+        ((androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        waitUntil(() -> vaultRows(a).isEmpty());
+        settle();
+        assertTrue(vaultRows(a).isEmpty());
+        assertEquals(View.VISIBLE, a.findViewById(R.id.empty).getVisibility());
+    }
+
+    @Test public void tappingAVaultTextFileOpensItInASecureViewerAndLockingWipesTheCopy() throws Exception {
+        VaultSession.pending.add(new File(storage, "Download/notes.txt"));
+        VaultActivity a = openVault();
+        createVault(a, "2468");
+        waitUntil(() -> vaultRows(a).size() == 1);
+        settle();
+        RecyclerView list = a.findViewById(R.id.list);
+        View decor = a.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(W, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(H, View.MeasureSpec.EXACTLY));
+        decor.layout(0, 0, W, H);
+        list.findViewHolderForAdapterPosition(0).itemView.performClick();
+        File cache = VaultSession.viewCache(a);
+        waitUntil(() -> shadowOf(a).peekNextStartedActivity() != null);
+        android.content.Intent next = shadowOf(a).getNextStartedActivity();
+        assertNotNull("the viewer should start", next);
+        assertEquals(ViewerActivity.class.getName(), next.getComponent().getClassName());
+        assertTrue(next.getBooleanExtra(ViewerActivity.EXTRA_SECURE, false));
+        File shown = new File(next.getStringExtra(ViewerActivity.EXTRA_PATH));
+        assertTrue("decrypted copy sits in the private cache", shown.getPath().startsWith(cache.getPath()));
+        assertTrue(shown.exists());
+
+        ((MaterialToolbar) a.findViewById(R.id.toolbar)).getMenu().performIdentifierAction(R.id.action_lock, 0);
+        settle();
+        assertFalse("locking removes decrypted copies", shown.exists());
+    }
+
+    @Test public void vaultHomeTileOpensTheVaultAndSelectionMovesFilesIn() throws Exception {
+        launch();
+        android.view.ViewGroup row = (android.view.ViewGroup) ((android.widget.LinearLayout) files().getView().findViewById(R.id.toolsGrid)).getChildAt(0);
+        assertEquals("Vault", ((TextView) row.getChildAt(1).findViewById(R.id.tileLabel)).getText().toString());
+        row.getChildAt(1).performClick();
+        assertEquals(VaultActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+
+        files().openDir(new File(storage, "Download"));
+        settle();
+        longClickRow("notes.txt");
+        menu(R.id.action_vault);
+        settle();
+        androidx.appcompat.app.AlertDialog d = (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertNotNull("asks before moving", d);
+        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        settle();
+        assertEquals(1, VaultSession.pending.size());
+        assertEquals(VaultActivity.class.getName(), shadowOf(activity).getNextStartedActivity().getComponent().getClassName());
+        assertTrue("nothing is touched until the vault is unlocked", new File(storage, "Download/notes.txt").exists());
     }
 
     private static void setField(Object o, String name, Object value) throws Exception {

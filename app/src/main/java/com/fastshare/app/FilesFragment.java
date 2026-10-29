@@ -519,6 +519,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         List<Object[]> toolTiles = new ArrayList<>();
         toolTiles.add(new Object[]{"Storage", R.drawable.ic_storage, ContextCompat.getColor(requireContext(), R.color.kind_archive),
                 (Runnable) () -> startActivity(new Intent(requireContext(), StorageActivity.class))});
+        toolTiles.add(new Object[]{"Vault", R.drawable.ic_lock, ContextCompat.getColor(requireContext(), R.color.kind_audio),
+                (Runnable) () -> startActivity(new Intent(requireContext(), VaultActivity.class))});
         toolTiles.add(new Object[]{"Apps", R.drawable.ic_apk, ContextCompat.getColor(requireContext(), R.color.kind_apk),
                 (Runnable) () -> startActivity(new Intent(requireContext(), AppsActivity.class))});
         fillGrid(tools, toolTiles, 4);
@@ -771,6 +773,8 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
         } else if (id == R.id.action_pin_folder) {
             toggleFavorites(java.util.Collections.singletonList(currentDir));
             updateToolbar();
+        } else if (id == R.id.action_vault) {
+            confirmMoveToVault(selectedFiles());
         } else if (id == R.id.action_compress) {
             compress(selectedFiles());
         } else if (id == R.id.action_extract) {
@@ -874,6 +878,19 @@ public class FilesFragment extends Fragment implements FileAdapter.Callbacks {
             pendingUndoMessage = "Renamed to " + renamed.getName();
             return renamed;
         });
+    }
+
+    private void confirmMoveToVault(final List<File> files) {
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Move " + Fmt.plural(files.size(), "item", "items") + " to the private vault?")
+                .setMessage("They are encrypted with your PIN, then the originals are deleted. If you forget the PIN, they can't be recovered.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Continue", (d, w) -> {
+                    VaultSession.pending.clear();
+                    VaultSession.pending.addAll(files);
+                    clearSelection();
+                    startActivity(new Intent(requireContext(), VaultActivity.class));
+                }).show();
     }
 
     private void showSelectTypeDialog() {

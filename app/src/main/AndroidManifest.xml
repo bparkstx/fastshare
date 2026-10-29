@@ -57,6 +57,12 @@
             android:exported="false" />
 
         <activity
+            android:name=".VaultActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".AppsActivity"
             android:exported="false" />
 

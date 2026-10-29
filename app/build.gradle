@@ -40,6 +40,9 @@ android {
         unitTests {
             includeAndroidResources = true
             all {
+                maxHeapSize = '3g'
+                // Robolectric keeps a lot of resources alive across the many UI tests
+                forkEvery = 0
                 // Optional: point at a folder holding the Robolectric android-all jar to run offline.
                 def roboDir = System.getenv('ROBOLECTRIC_DIR')
                 if (roboDir) {
@@ -63,6 +66,7 @@ dependencies {
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.viewpager2:viewpager2:1.1.0'
+    implementation 'androidx.biometric:biometric:1.1.0'
     implementation 'org.apache.commons:commons-compress:1.26.2'   // 7z, tar, gz, bz2, xz
     implementation 'org.tukaani:xz:1.9'
     implementation 'com.github.junrar:junrar:7.5.5'                // rar
