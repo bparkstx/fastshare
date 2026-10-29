@@ -244,7 +244,8 @@ public class ViewerActivity extends AppCompatActivity {
         }
 
         @Override
-        public void onBindViewHolder(@NonNull final Holder h, final int position) {
+        public void onBindViewHolder(@NonNull final Holder h, int bindPosition) {
+            final int position = bindPosition;   // the pager never reorders pages, and the holder check below guards against reuse
             h.view.setImageDrawable(null);
             h.position = position;
             final int width = getResources().getDisplayMetrics().widthPixels;

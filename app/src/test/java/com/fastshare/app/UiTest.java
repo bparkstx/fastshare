@@ -2193,6 +2193,41 @@ public class UiTest {
         assertEquals(java.util.Arrays.asList("2026", "beach.jpg"), remoteRows(a));
     }
 
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night-xxhdpi")
+    public void newScreensRenderInDarkMode() throws Exception {
+        installFakeServer();
+        Connection c = saveConnection("Home NAS", "nas.local", Connection.Type.SMB);
+        networkController = Robolectric.buildActivity(NetworkActivity.class).setup();
+        settle();
+        shotOf(networkController.get(), "110_dark_network_list");
+        RemoteActivity r = openRemote(c);
+        tapRow(r, 1, true);
+        shotOf(r, "111_dark_remote_selected");
+
+        ShareHub hub = FastShareApp.hub(RuntimeEnvironment.getApplication());
+        FileServer.Transfer t = new FileServer.Transfer(9, true, "IMG_4021.HEIC", "192.168.23.40", 2_900_000);
+        t.done = 2_900_000;
+        t.state = FileServer.State.DONE;
+        t.detail = "Downloads/FileBandit";
+        hub.onTransfer(t);
+        ActivityController<HistoryActivity> h = Robolectric.buildActivity(HistoryActivity.class).setup();
+        settle();
+        shotOf(h.get(), "112_dark_history");
+        try { h.pause().stop().destroy(); } catch (Exception ignored) { }
+
+        launch();
+        selectTab(R.id.nav_transfer);
+        FastShareApp.hub(activity).setLinkPin("4821");
+        settle();
+        shotScrollContent("113_dark_transfer_pin", transfer().getView());
+        VaultSession.testVault = new Vault(new File(storage.getParentFile(), "dark-vault-" + System.nanoTime()), Vault.NO_OUTER, 1000);
+        ActivityController<VaultActivity> v = Robolectric.buildActivity(VaultActivity.class).setup();
+        settle();
+        shotOf(v.get(), "114_dark_vault_setup");
+        try { v.pause().stop().destroy(); } catch (Exception ignored) { }
+    }
+
     private static void setField(Object o, String name, Object value) throws Exception {
         Field f = o.getClass().getDeclaredField(name);
         f.setAccessible(true);
